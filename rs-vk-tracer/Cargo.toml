@@ -1,0 +1,8 @@
+[package]
+name = "rs-vk-tracer"
+version = "0.1.0"
+authors = ["Lucas Malandrino <lucas.malandrino@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+rs-vk-tracer-renderer = { path = "../rs-vk-tracer-renderer", version = "0.1.0" }
