@@ -1,5 +1,4 @@
-use ash::extensions::khr;
-use ash::vk;
+use ash::{extensions::khr, vk};
 use winit::window::Window;
 
 pub struct SurfaceModule {

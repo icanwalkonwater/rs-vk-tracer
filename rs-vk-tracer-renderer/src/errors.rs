@@ -11,5 +11,7 @@ pub enum RendererError {
     #[error("Vulkan generic error")]
     VulkanGeneric(#[from] ash::vk::Result),
     #[error("Winit window creation failure")]
-    Winit(#[from] winit::error::OsError)
+    Winit(#[from] winit::error::OsError),
+    #[error("Can't find any suitable devices !")]
+    NoSuitablePhysicalDevice,
 }

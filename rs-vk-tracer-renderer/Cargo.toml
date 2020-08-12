@@ -4,15 +4,19 @@ version = "0.1.0"
 authors = ["Lucas Malandrino <lucas.malandrino@gmail.com>"]
 edition = "2018"
 
+[features]
+default = ["raytracing-nv"]
+validation-layers = []
+raytracing-nv = []
+
 [dependencies]
 ash = "~0.31.0"
 ash-window = "~0.5.0"
 vk-mem = "~0.2.2"
-winit = "~0.22.2"
 
 log = "~0.4.11"
 thiserror = "~1.0.20"
 lazy_static = "~1.4.0"
 
-[features]
-validation-layers = []
+[dependencies.winit]
+version = "~0.22.2"

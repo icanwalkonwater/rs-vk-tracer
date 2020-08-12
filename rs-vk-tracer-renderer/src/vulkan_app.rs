@@ -1,19 +1,25 @@
-use crate::errors::Result;
-use crate::extensions::vk_required_extensions_with_surface_raw;
-use crate::{str_to_vk_string, AppInfo, ENGINE_NAME, ENGINE_VERSION, VULKAN_VERSION};
-use ash;
-use ash::version::{EntryV1_0, InstanceV1_0};
-use ash::vk;
+use crate::{
+    errors::Result, extensions::vk_required_instance_extensions_with_surface, str_to_vk_string,
+    AppInfo, ENGINE_NAME, ENGINE_VERSION, VULKAN_VERSION,
+};
+use ash::{
+    self,
+    version::{EntryV1_0, InstanceV1_0},
+    vk,
+};
 use winit::window::Window;
 
-use crate::surface::SurfaceModule;
 #[cfg(feature = "validation-layers")]
-use crate::validation_layers::vk_validation_layers_raw;
+use crate::debug_utils::{vk_validation_layers_raw, DebugUtilsModule};
+use crate::{physical_device_selection::pick_physical_device, surface::SurfaceModule};
 use std::mem::ManuallyDrop;
 
 pub struct VulkanApp {
     _entry: ash::Entry,
     instance: ash::Instance,
+
+    #[cfg(feature = "validation-layers")]
+    debug_utils: ManuallyDrop<DebugUtilsModule>,
 
     surface: ManuallyDrop<SurfaceModule>,
 }
@@ -24,7 +30,7 @@ impl VulkanApp {
         // Get entry and create instance
         let entry = ash::Entry::new()?;
         let instance = unsafe {
-            let extension_names = vk_required_extensions_with_surface_raw(window)?;
+            let extension_names = vk_required_instance_extensions_with_surface(window)?;
 
             let application_info = vk::ApplicationInfo::builder()
                 .application_name(str_to_vk_string(&app_info.name))
@@ -46,12 +52,21 @@ impl VulkanApp {
             entry.create_instance(&create_info, None)
         }?;
 
+        // Debug utils
+        #[cfg(feature = "validation-layers")]
+        let debug_utils = DebugUtilsModule::new(&entry, &instance)?;
+
         // Build surface
         let surface = SurfaceModule::new(&entry, &instance, window)?;
+
+        // Pick physical device
+        let physical_device = pick_physical_device(&instance, &surface)?;
 
         Ok(Self {
             _entry: entry,
             instance,
+            #[cfg(feature = "validation-layers")]
+            debug_utils: ManuallyDrop::new(debug_utils),
             surface: ManuallyDrop::new(surface),
         })
     }
@@ -61,6 +76,10 @@ impl Drop for VulkanApp {
     fn drop(&mut self) {
         unsafe {
             ManuallyDrop::drop(&mut self.surface);
+
+            #[cfg(feature = "validation-layers")]
+            ManuallyDrop::drop(&mut self.debug_utils);
+
             self.instance.destroy_instance(None)
         }
     }

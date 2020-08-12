@@ -1,13 +1,46 @@
-use ash::vk;
+use ash::{extensions::ext, vk};
 use log::{log, Level};
-use std::borrow::Cow;
-use std::ffi::CStr;
-use std::os::raw::c_char;
+use std::{borrow::Cow, ffi::CStr, os::raw::c_char};
 
-const LAYER_KHRONOS: &str = "VK_LAYER_KHRONOS_validation";
+use crate::errors::Result;
+
+const LAYER_KHRONOS: &str = "VK_LAYER_KHRONOS_validation\0";
 
 pub fn vk_validation_layers_raw() -> Vec<*const c_char> {
     vec![LAYER_KHRONOS.as_ptr() as *const c_char]
+}
+
+pub struct DebugUtilsModule {
+    debug_utils_ext: ext::DebugUtils,
+    debug_utils_messenger: vk::DebugUtilsMessengerEXT,
+}
+
+impl DebugUtilsModule {
+    pub fn new(entry: &ash::Entry, instance: &ash::Instance) -> Result<Self> {
+        let debug_utils_ext = ext::DebugUtils::new(entry, instance);
+        let debug_utils_messenger = {
+            let create_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+                .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
+                .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
+                .pfn_user_callback(Some(vulkan_debug_callback));
+
+            unsafe { debug_utils_ext.create_debug_utils_messenger(&create_info, None) }
+        }?;
+
+        Ok(Self {
+            debug_utils_ext,
+            debug_utils_messenger,
+        })
+    }
+}
+
+impl Drop for DebugUtilsModule {
+    fn drop(&mut self) {
+        unsafe {
+            self.debug_utils_ext
+                .destroy_debug_utils_messenger(self.debug_utils_messenger, None);
+        }
+    }
 }
 
 unsafe extern "system" fn vulkan_debug_callback(
@@ -48,6 +81,6 @@ fn severity_to_level(severity: vk::DebugUtilsMessageSeverityFlagsEXT) -> Level {
         vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => Level::Warn,
         vk::DebugUtilsMessageSeverityFlagsEXT::INFO => Level::Info,
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => Level::Trace,
-        _ => Level::Trace
+        _ => Level::Trace,
     }
 }

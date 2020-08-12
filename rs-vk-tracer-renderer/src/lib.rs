@@ -1,19 +1,31 @@
-use winit::dpi::LogicalSize;
-use winit::event_loop::EventLoop;
-use winit::window::{Fullscreen, Window, WindowBuilder};
+use ::winit::{
+    dpi::LogicalSize,
+    event_loop::EventLoop,
+    window::{Fullscreen, Window, WindowBuilder},
+};
 
 use errors::Result;
 use lazy_static::lazy_static;
-use std::borrow::Cow;
-use std::ffi::CStr;
+use std::{borrow::Cow, ffi::CStr};
 
 pub mod errors;
 mod extensions;
+mod physical_device_selection;
 pub mod surface;
 pub mod vulkan_app;
 
+// Re-exports ash
+pub mod ash {
+    pub use ::ash::*;
+}
+
+// Re-export winit
+pub mod winit {
+    pub use ::winit::*;
+}
+
 #[cfg(feature = "validation-layers")]
-mod validation_layers;
+mod debug_utils;
 
 pub const ENGINE_NAME: &str = "VK Tracer";
 
@@ -30,6 +42,15 @@ pub const VULKAN_VERSION: u32 = ash::vk::make_version(1, 1, 0);
 pub struct AppInfo {
     name: String,
     version: u32,
+}
+
+impl AppInfo {
+    pub fn new(name: &str, major: u32, minor: u32, patch: u32) -> Self {
+        AppInfo {
+            name: name.into(),
+            version: ash::vk::make_version(major, minor, patch),
+        }
+    }
 }
 
 pub fn create_window(
@@ -54,12 +75,10 @@ pub fn create_window(
     Ok((event_loop, window))
 }
 
-pub unsafe fn str_to_vk_string(string: &str) -> &CStr {
-    CStr::from_ptr(string.as_ptr() as *const std::os::raw::c_char)
+pub fn str_to_vk_string(string: &str) -> &CStr {
+    unsafe { CStr::from_ptr(string.as_ptr() as *const std::os::raw::c_char) }
 }
 
-pub unsafe fn vk_string_to_string<'a>(
-    vk_string: *const std::os::raw::c_char,
-) -> Cow<'a, str> {
-    CStr::from_ptr(vk_string).to_string_lossy()
+pub fn vk_string_to_string<'a>(vk_string: *const std::os::raw::c_char) -> Cow<'a, str> {
+    unsafe { CStr::from_ptr(vk_string).to_string_lossy() }
 }
