@@ -1,0 +1,11 @@
+[package]
+name = "demo"
+version = "0.1.0"
+authors = ["Lucas Malandrino <lucas.malandrino@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+vk_tracer = { path = "../vk_tracer", features = ["ext-debug"] }
+winit = "^0.23.0"
+anyhow = "^1.0.33"
+simplelog = "^0.8.0"
