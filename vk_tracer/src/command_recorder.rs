@@ -1,4 +1,5 @@
 use ash::{version::DeviceV1_0, vk};
+use log::error;
 
 use crate::{device::VtDevice, errors::Result, physical_device_selection::VtAdapterInfo};
 
@@ -105,7 +106,7 @@ impl VtCommandPool {
         }
     }
 
-    pub fn allocate_command_buffers(
+    pub(crate) fn allocate_command_buffers(
         &self,
         device: &VtDevice,
         count: u32,
@@ -131,6 +132,66 @@ impl VtCommandPool {
 
         Ok(command_buffers)
     }
+}
 
-    // TODO: recording
+impl VtDevice {
+    pub(crate) fn get_transient_transfer_recorder(&self) -> Result<()> {
+        let command_buffer =
+            self.command_pool
+                .allocate_command_buffers(self, 1, self.command_pool.transfer.pool)?[0];
+
+        unsafe {
+            self.handle.begin_command_buffer(
+                command_buffer,
+                &vk::CommandBufferBeginInfo::builder()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
+pub struct VtTransferRecorder<'a> {
+    device: ash::Device,
+    buffer: vk::CommandBuffer,
+    queue: vk::Queue,
+    has_been_submited: bool,
+    _marker: std::marker::PhantomData<&'a ()>,
+}
+
+impl VtTransferRecorder<'_> {
+    pub fn copy_buffer_to_buffer() {
+        todo!("When buffer creation")
+    }
+
+    pub fn submit(&mut self) -> Result<()> {
+        unsafe {
+            self.device.end_command_buffer(self.buffer)?;
+            let fence = self
+                .device
+                .create_fence(&vk::FenceCreateInfo::builder(), None)?;
+
+            let buffers = [self.buffer];
+            let submit_info = [vk::SubmitInfo::builder().command_buffers(&buffers).build()];
+
+            self.device.queue_submit(self.queue, &submit_info, fence)?;
+        }
+
+        self.has_been_submited = true;
+
+        Ok(())
+    }
+}
+
+impl Drop for VtTransferRecorder<'_> {
+    fn drop(&mut self) {
+        if !self.has_been_submited {
+            if cfg!(not(debug_assertions)) {
+                error!("A command recorder was never submitted !");
+            } else if !std::thread::panicking() {
+                panic!("You forgot to submit me sempai !");
+            }
+        }
+    }
 }

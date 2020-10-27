@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use simplelog::{
     ConfigBuilder, LevelFilter, LevelPadding, SimpleLogger, TermLogger, TerminalMode, ThreadLogMode,
 };
@@ -42,12 +44,19 @@ fn main() -> anyhow::Result<()> {
         (size.width, size.height)
     })?;
 
-    let adapter = instance.request_adapter(
-        &surface,
-        VtAdapterRequirements::default_from_window(&window)?,
-    )?;
+    let adapter = instance.request_adapter(VtAdapterRequirements::default_from_window(surface.clone(), &window)?)?;
 
     let device = adapter.create_device(&instance)?;
+
+    let data = [1, 2, 3, 4];
+    let buffer = device.create_buffer(&BufferDescription {
+        label: Some(Cow::Borrowed("Test buffer")),
+        size: std::mem::size_of_val(&data) as DeviceSize,
+        usage: BufferUsage::STORAGE_BUFFER,
+    })?;
+
+    let staging_buffer = device.create_staging_buffer_for(&buffer)?;
+    staging_buffer.store(&data)?;
 
     Ok(())
 }

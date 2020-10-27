@@ -17,7 +17,7 @@ pub(crate) fn choose_surface_format(
     formats
         .iter()
         .zip(format_properties.iter())
-        .find(|(format, properties)| {
+        .find(|(format, _)| {
             requirements.surface_formats.contains(&format.format)
                 && requirements
                     .surface_color_spaces
@@ -45,6 +45,7 @@ pub(crate) fn choose_surface_present_mode(
     vk::PresentModeKHR::FIFO
 }
 
+#[derive(Clone)]
 pub struct VtSurface {
     pub(crate) loader: ash::extensions::khr::Surface,
     pub(crate) handle: vk::SurfaceKHR,
@@ -78,8 +79,8 @@ impl VtSurface {
 
     pub fn complete(&mut self, adapter: &VtAdapter) {
         let format = choose_surface_format(
-            &adapter.1.info.surface_formats,
-            &adapter.1.info.surface_format_properties,
+            &adapter.1.info.surface_formats.as_ref().unwrap(),
+            &adapter.1.info.surface_format_properties.as_ref().unwrap(),
             &adapter.2,
         )
         .unwrap();
@@ -87,8 +88,8 @@ impl VtSurface {
         self.format = format.format;
         self.color_space = format.color_space;
 
-        let min_extent = adapter.1.info.surface_capabilities.min_image_extent;
-        let max_extent = adapter.1.info.surface_capabilities.max_image_extent;
+        let min_extent = adapter.1.info.surface_capabilities.unwrap().min_image_extent;
+        let max_extent = adapter.1.info.surface_capabilities.unwrap().max_image_extent;
 
         let corrected_width = clamp(self.extent.width, min_extent.width, max_extent.width);
         let corrected_height = clamp(self.extent.height, min_extent.height, max_extent.height);

@@ -16,8 +16,8 @@ use crate::{
 pub type Format = vk::Format;
 pub type ColorSpace = vk::ColorSpaceKHR;
 
-#[derive(Debug)]
 pub struct VtAdapterRequirements {
+    pub compatible_surface: Option<VtSurface>,
     pub instance_extensions: Vec<*const c_char>,
     pub required_extensions: Vec<&'static CStr>,
     pub optional_extensions: Vec<&'static CStr>,
@@ -28,8 +28,9 @@ pub struct VtAdapterRequirements {
 }
 
 impl VtAdapterRequirements {
-    pub fn default_from_window(window: &impl HasRawWindowHandle) -> Result<Self> {
+    pub fn default_from_window(surface: VtSurface, window: &impl HasRawWindowHandle) -> Result<Self> {
         Ok(Self {
+            compatible_surface: Some(surface),
             instance_extensions: vk_required_instance_extensions_with_surface(window)?,
             ..Default::default()
         })
@@ -39,6 +40,7 @@ impl VtAdapterRequirements {
 impl Default for VtAdapterRequirements {
     fn default() -> Self {
         Self {
+            compatible_surface: None,
             instance_extensions: vk_required_instance_extensions(),
             required_extensions: vk_required_device_extensions(),
             optional_extensions: Vec::new(),
@@ -59,11 +61,8 @@ pub struct VtAdapter(
 
 impl VtInstance {
     pub fn request_adapter(
-        &self,
-        surface: &VtSurface,
-        requirements: VtAdapterRequirements,
-    ) -> Result<VtAdapter> {
-        let adapter = pick_physical_device(&self.instance, surface, &requirements)?;
+        &self, requirements: VtAdapterRequirements) -> Result<VtAdapter> {
+        let adapter = pick_physical_device(&self.instance, &requirements)?;
 
         Ok(VtAdapter(adapter.info.handle, adapter, requirements))
     }

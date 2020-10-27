@@ -23,10 +23,10 @@ pub(crate) struct PhysicalDeviceInfo {
     pub queue_families: Vec<vk::QueueFamilyProperties>,
     pub memory_properties: vk::PhysicalDeviceMemoryProperties,
 
-    pub surface_capabilities: vk::SurfaceCapabilitiesKHR,
-    pub surface_formats: Vec<vk::SurfaceFormatKHR>,
-    pub surface_format_properties: Vec<vk::FormatProperties>,
-    pub surface_present_modes: Vec<vk::PresentModeKHR>,
+    pub surface_capabilities: Option<vk::SurfaceCapabilitiesKHR>,
+    pub surface_formats: Option<Vec<vk::SurfaceFormatKHR>>,
+    pub surface_format_properties: Option<Vec<vk::FormatProperties>>,
+    pub surface_present_modes: Option<Vec<vk::PresentModeKHR>>,
 }
 
 #[derive(Debug, Clone)]
@@ -46,7 +46,6 @@ pub(crate) struct VtAdapterInfo {
 
 pub(crate) fn pick_physical_device(
     instance: &ash::Instance,
-    surface: &VtSurface,
     requirements: &VtAdapterRequirements,
 ) -> Result<VtAdapterInfo> {
     let physical_devices = unsafe { instance.enumerate_physical_devices()? };
@@ -63,24 +62,33 @@ pub(crate) fn pick_physical_device(
                 instance.get_physical_device_queue_family_properties(physical_device);
             let memory_properties = instance.get_physical_device_memory_properties(physical_device);
 
-            let surface_capabilities = surface
-                .loader
-                .get_physical_device_surface_capabilities(physical_device, surface.handle)
-                .expect("Failed to get surface capabilities");
-            let surface_formats = surface
+            let surface_capabilities = requirements.compatible_surface.as_ref().map(|surface| {
+                surface
+                    .loader
+                    .get_physical_device_surface_capabilities(physical_device, surface.handle)
+                    .expect("Failed to get surface capabilities")
+            });
+
+            let surface_formats = requirements.compatible_surface.as_ref().map(|surface| {
+                surface
                 .loader
                 .get_physical_device_surface_formats(physical_device, surface.handle)
-                .expect("Faild to get surface formats");
-            let surface_format_properties = surface_formats
+                .expect("Faild to get surface formats")
+            });
+            let surface_format_properties = surface_formats.as_ref().map(|surface_formats| {
+                surface_formats
                 .iter()
                 .map(|format| {
                     instance.get_physical_device_format_properties(physical_device, format.format)
                 })
-                .collect::<Vec<_>>();
-            let surface_present_modes = surface
-                .loader
-                .get_physical_device_surface_present_modes(physical_device, surface.handle)
-                .expect("Failed to get surface present modes");
+                .collect::<Vec<_>>()
+            });
+            let surface_present_modes = requirements.compatible_surface.as_ref().map(|surface| {
+                surface
+                    .loader
+                    .get_physical_device_surface_present_modes(physical_device, surface.handle)
+                    .expect("Failed to get surface present modes")
+            });
 
             PhysicalDeviceInfo {
                 handle: physical_device,
@@ -96,7 +104,7 @@ pub(crate) fn pick_physical_device(
             }
         })
         .filter_map(|device_info| {
-            if let Some(res) = process_physical_device(device_info, surface, requirements) {
+            if let Some(res) = process_physical_device(device_info, requirements) {
                 info!(" => Device is eligible");
                 Some(res)
             } else {
@@ -118,7 +126,6 @@ pub(crate) fn pick_physical_device(
 
 fn process_physical_device(
     info: PhysicalDeviceInfo,
-    surface: &VtSurface,
     requirements: &VtAdapterRequirements,
 ) -> Option<VtAdapterInfo> {
     info!(
@@ -173,24 +180,30 @@ fn process_physical_device(
     // *** Check swapchain formats
     debug!(" Checking swapchain formats...");
 
-    debug!("  Available formats:");
-    for format in info.surface_formats.iter() {
-        debug!(
-            "  - Format {:?} / Color space {:?}",
-            format.format, format.color_space
-        );
-    }
+    if let (Some(surface_formats), Some(surface_format_properties)) = (&info.surface_formats, &info.surface_format_properties) {
 
-    if let Some(format) = choose_surface_format(
-        &info.surface_formats,
-        &info.surface_format_properties,
-        requirements,
-    ) {
-        debug!(" - Format {:?} [OK]", format.format);
-        debug!(" - Color space {:?} [OK]", format.color_space);
+        debug!("  Available formats:");
+        for format in surface_formats.iter() {
+            debug!(
+                "  - Format {:?} / Color space {:?}",
+                format.format, format.color_space
+            );
+        }
+
+        if let Some(format) = choose_surface_format(
+            &surface_formats,
+            &surface_format_properties,
+            requirements,
+        ) {
+            debug!(" - Format {:?} [OK]", format.format);
+            debug!(" - Color space {:?} [OK]", format.color_space);
+        } else {
+            debug!(" - Can't find the required color space and format !");
+            return None;
+        }
+
     } else {
-        debug!(" - Can't find the required color space and format !");
-        return None;
+        debug!("  No surface provided, skipping.")
     }
 
     // *** Check queue families
@@ -228,13 +241,15 @@ fn process_physical_device(
         .iter()
         .enumerate()
         .find(|(index, _)| unsafe {
-            surface
-                .loader
-                .get_physical_device_surface_support(info.handle, *index as u32, surface.handle)
-                .unwrap_or_else(|err| {
-                    error!(" - Failed to get surface support because of {:?}", err);
-                    false
-                })
+            requirements.compatible_surface.as_ref().map_or(true, |surface| {
+                surface
+                    .loader
+                    .get_physical_device_surface_support(info.handle, *index as u32, surface.handle)
+                    .unwrap_or_else(|err| {
+                        error!(" - Failed to get surface support because of {:?}", err);
+                        false
+                    })
+            })
         })
         .map(|(index, &properties)| QueueFamilyInfo {
             index: index as u32,
