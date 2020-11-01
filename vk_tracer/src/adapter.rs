@@ -4,15 +4,13 @@ use ash::vk;
 use raw_window_handle::HasRawWindowHandle;
 
 use crate::{
+    device::VtDevice,
     errors::Result,
-    extensions::{
-        vk_required_device_extensions, vk_required_instance_extensions,
-        vk_required_instance_extensions_with_surface,
-    },
     instance::VtInstance,
     physical_device_selection::{pick_physical_device, VtAdapterInfo},
     surface::VtSurface,
 };
+
 pub type Format = vk::Format;
 pub type ColorSpace = vk::ColorSpaceKHR;
 
@@ -34,7 +32,7 @@ impl VtAdapterRequirements {
     ) -> Result<Self> {
         Ok(Self {
             compatible_surface: Some(surface),
-            instance_extensions: vk_required_instance_extensions_with_surface(window)?,
+            instance_extensions: VtInstance::required_extensions_with_surface(window)?,
             ..Default::default()
         })
     }
@@ -44,8 +42,8 @@ impl Default for VtAdapterRequirements {
     fn default() -> Self {
         Self {
             compatible_surface: None,
-            instance_extensions: vk_required_instance_extensions(),
-            required_extensions: vk_required_device_extensions(),
+            instance_extensions: VtInstance::required_extensions(),
+            required_extensions: VtDevice::required_extensions(),
             optional_extensions: Vec::new(),
             surface_formats: vec![Format::R8G8B8A8_SRGB, Format::B8G8R8A8_SRGB],
             surface_color_spaces: vec![ColorSpace::SRGB_NONLINEAR],

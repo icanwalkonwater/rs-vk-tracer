@@ -1,5 +1,5 @@
 use ash::{version::DeviceV1_0, vk};
-use log::error;
+use log::{error, warn};
 
 use crate::{
     allocation::{DeviceSize, VtBuffer},
@@ -67,14 +67,13 @@ impl QueueFamilyIndices {
     }
 }
 
-#[derive(Copy, Clone)]
 pub(crate) struct QueuePool {
-    pub queue: vk::Queue,
-    pub pool: vk::CommandPool,
+    pub queue: Mutex<vk::Queue>,
+    pub pool: Mutex<vk::CommandPool>,
 }
 
 pub(crate) struct VtCommandPool {
-    pub(crate) queues: Vec<Mutex<QueuePool>>,
+    pub(crate) queues: Vec<QueuePool>,
     graphics: usize,
     present: usize,
     transfer: usize,
@@ -86,27 +85,31 @@ impl VtCommandPool {
             let mut queues = Vec::new();
 
             // Push graphics queue
-            queues.push(Mutex::new(QueuePool {
-                queue: device.get_device_queue(adapter.graphics_queue.index, 0),
-                pool: device.create_command_pool(
-                    &vk::CommandPoolCreateInfo::builder()
-                        .queue_family_index(adapter.graphics_queue.index),
-                    None,
-                )?,
-            }));
+            queues.push(QueuePool {
+                queue: Mutex::new(device.get_device_queue(adapter.graphics_queue.index, 0)),
+                pool: Mutex::new(
+                    device.create_command_pool(
+                        &vk::CommandPoolCreateInfo::builder()
+                            .queue_family_index(adapter.graphics_queue.index),
+                        None,
+                    )?,
+                ),
+            });
 
             let graphics = 0;
 
             // Add present queue if different from the graphics one
             let present = if adapter.present_queue.index != adapter.graphics_queue.index {
-                queues.push(Mutex::new(QueuePool {
-                    queue: device.get_device_queue(adapter.present_queue.index, 0),
-                    pool: device.create_command_pool(
-                        &vk::CommandPoolCreateInfo::builder()
-                            .queue_family_index(adapter.present_queue.index),
-                        None,
-                    )?,
-                }));
+                queues.push(QueuePool {
+                    queue: Mutex::new(device.get_device_queue(adapter.present_queue.index, 0)),
+                    pool: Mutex::new(
+                        device.create_command_pool(
+                            &vk::CommandPoolCreateInfo::builder()
+                                .queue_family_index(adapter.present_queue.index),
+                            None,
+                        )?,
+                    ),
+                });
 
                 queues.len() - 1
             } else {
@@ -119,14 +122,16 @@ impl VtCommandPool {
             } else if adapter.transfer_queue.index == adapter.present_queue.index {
                 present
             } else {
-                queues.push(Mutex::new(QueuePool {
-                    queue: device.get_device_queue(adapter.transfer_queue.index, 0),
-                    pool: device.create_command_pool(
-                        &vk::CommandPoolCreateInfo::builder()
-                            .queue_family_index(adapter.transfer_queue.index),
-                        None,
-                    )?,
-                }));
+                queues.push(QueuePool {
+                    queue: Mutex::new(device.get_device_queue(adapter.transfer_queue.index, 0)),
+                    pool: Mutex::new(
+                        device.create_command_pool(
+                            &vk::CommandPoolCreateInfo::builder()
+                                .queue_family_index(adapter.transfer_queue.index),
+                            None,
+                        )?,
+                    ),
+                });
 
                 queues.len() - 1
             };
@@ -140,32 +145,28 @@ impl VtCommandPool {
         }
     }
 
-    pub(crate) fn acquire_graphics(&self) -> MutexGuard<'_, QueuePool> {
-        self.queues[self.graphics]
-            .lock()
-            .expect("Poisoined mutex !")
+    pub(crate) fn graphics(&self) -> &QueuePool {
+        &self.queues[self.graphics]
     }
 
-    pub(crate) fn acquire_present(&self) -> MutexGuard<'_, QueuePool> {
-        self.queues[self.present].lock().expect("Poisoined mutex !")
+    pub(crate) fn present(&self) -> &QueuePool {
+        &self.queues[self.present]
     }
 
-    pub(crate) fn acquire_transfer(&self) -> MutexGuard<'_, QueuePool> {
-        self.queues[self.transfer]
-            .lock()
-            .expect("Poisoined mutex !")
+    pub(crate) fn transfer(&self) -> &QueuePool {
+        &self.queues[self.transfer]
     }
 
     pub(crate) fn allocate_command_buffers(
         &self,
         device: &VtDevice,
         count: u32,
-        pool: &QueuePool,
+        pool: vk::CommandPool,
     ) -> Result<Vec<vk::CommandBuffer>> {
         let command_buffers = unsafe {
             device.handle.allocate_command_buffers(
                 &vk::CommandBufferAllocateInfo::builder()
-                    .command_pool(pool.pool)
+                    .command_pool(pool)
                     .command_buffer_count(count)
                     .level(vk::CommandBufferLevel::PRIMARY),
             )?
@@ -186,11 +187,10 @@ impl VtCommandPool {
 
 impl VtDevice {
     pub fn get_transient_transfer_recorder(&self) -> Result<VtTransferRecorder> {
-        let queue_pool = self.command_pool.acquire_transfer();
+        let queue_pool = self.command_pool.transfer();
+        let pool = queue_pool.pool.lock().expect("Poisoned");
 
-        let command_buffer = self
-            .command_pool
-            .allocate_command_buffers(self, 1, &queue_pool)?[0];
+        let command_buffer = self.command_pool.allocate_command_buffers(self, 1, *pool)?[0];
 
         unsafe {
             self.handle.begin_command_buffer(
@@ -202,9 +202,10 @@ impl VtDevice {
 
         Ok(VtTransferRecorder {
             device: &self,
-            pool: queue_pool,
+            queue_pool,
+            pool,
             buffer: command_buffer,
-            has_been_submitted: false,
+            has_been_ended: false,
             _marker: Default::default(),
         })
     }
@@ -212,22 +213,22 @@ impl VtDevice {
 
 pub struct VtTransferRecorder<'a> {
     device: &'a VtDevice,
-    pool: MutexGuard<'a, QueuePool>,
+    queue_pool: &'a QueuePool,
+    pool: MutexGuard<'a, vk::CommandPool>,
     buffer: vk::CommandBuffer,
-    has_been_submitted: bool,
-    _marker: std::marker::PhantomData<&'a ()>,
+    has_been_ended: bool,
+    // Mark !Sync + !Send
+    _marker: std::marker::PhantomData<std::cell::UnsafeCell<()>>,
 }
 
-impl VtTransferRecorder<'_> {
-    pub fn copy_buffer_to_buffer<D>(
-        &mut self,
-        src: &VtBuffer<D>,
-        dst: &mut VtBuffer<D>,
-    ) -> Result<()> {
-        if self.has_been_submitted {
-            return Err(VtError::CommandBufferAlreadySubmitted);
-        }
-
+impl<'a> VtTransferRecorder<'a> {
+    pub fn copy_buffer_to_buffer<'b, D>(
+        mut self,
+        src: &'b VtBuffer<D>,
+        dst: &'b mut VtBuffer<D>,
+    ) -> Result<Self>
+    where
+        'b: 'a, {
         unsafe {
             let region = [vk::BufferCopy::builder()
                 .src_offset(src.info.get_offset() as DeviceSize)
@@ -240,12 +241,41 @@ impl VtTransferRecorder<'_> {
                 .cmd_copy_buffer(self.buffer, src.buffer, dst.buffer, &region);
         }
 
-        Ok(())
+        Ok(self)
     }
 
-    pub fn submit(&mut self) -> Result<()> {
+    pub fn finish(mut self) -> Result<VtRecorderFinished<'a>> {
         unsafe {
             self.device.handle.end_command_buffer(self.buffer)?;
+        }
+
+        self.has_been_ended = true;
+
+        Ok(VtRecorderFinished {
+            device: self.device,
+            pool: self.queue_pool,
+            buffer: self.buffer,
+        })
+    }
+}
+
+impl Drop for VtTransferRecorder<'_> {
+    fn drop(&mut self) {
+        if !self.has_been_ended {
+            warn!("Recorded was never ended :");
+        }
+    }
+}
+
+pub struct VtRecorderFinished<'a> {
+    device: &'a VtDevice,
+    pool: &'a QueuePool,
+    buffer: vk::CommandBuffer,
+}
+
+impl VtRecorderFinished<'_> {
+    pub fn submit(&mut self) -> Result<()> {
+        unsafe {
             let fence = self
                 .device
                 .handle
@@ -254,9 +284,17 @@ impl VtTransferRecorder<'_> {
             let buffers = [self.buffer];
             let submit_info = [vk::SubmitInfo::builder().command_buffers(&buffers).build()];
 
+            let queue = self
+                .device
+                .command_pool
+                .transfer()
+                .queue
+                .lock()
+                .expect("Poisoned mutex");
+
             self.device
                 .handle
-                .queue_submit(self.pool.queue, &submit_info, fence)?;
+                .queue_submit(*queue, &submit_info, fence)?;
 
             let fences = [fence];
             self.device
@@ -264,28 +302,20 @@ impl VtTransferRecorder<'_> {
                 .wait_for_fences(&fences, true, std::u64::MAX)?;
         }
 
-        self.has_been_submitted = true;
-
-        // Destroy buffer
-        unsafe {
-            let buffers = [self.buffer];
-            self.device
-                .handle
-                .free_command_buffers(self.pool.pool, &buffers);
-        }
-
         Ok(())
     }
 }
 
-impl Drop for VtTransferRecorder<'_> {
+impl Drop for VtRecorderFinished<'_> {
     fn drop(&mut self) {
-        if !self.has_been_submitted {
-            if cfg!(not(debug_assertions)) {
-                error!("A command recorder was never submitted !");
-            } else if !std::thread::panicking() {
-                panic!("You forgot to submit me sempai !");
-            }
+        // Destroy buffer
+        unsafe {
+            let buffers = [self.buffer];
+
+            // Doesn't return a Result for some reason, why not
+            self.device
+                .handle
+                .free_command_buffers(*self.pool.pool.lock().expect("Poisoned"), &buffers);
         }
     }
 }

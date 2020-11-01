@@ -100,8 +100,8 @@ impl Drop for VtDevice {
     fn drop(&mut self) {
         unsafe {
             for queue in self.command_pool.queues.iter() {
-                let queue = queue.lock().expect("Poisoned");
-                self.handle.destroy_command_pool(queue.pool, None);
+                let pool = queue.pool.lock().expect("Poisoned");
+                self.handle.destroy_command_pool(*pool, None);
             }
 
             self.vma.destroy();

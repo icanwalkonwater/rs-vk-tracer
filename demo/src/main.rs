@@ -66,14 +66,15 @@ fn main() -> anyhow::Result<()> {
     let gpu_buffer = gpu_buffer.upload()?;
 
     let mut cpu_buffer = device.create_staging_buffer_for(&gpu_buffer)?;
-    {
-        let mut recorder = device.get_transient_transfer_recorder()?;
-        recorder.copy_buffer_to_buffer(&gpu_buffer, &mut cpu_buffer)?;
-        recorder.submit()?;
-    }
+
+    device
+        .get_transient_transfer_recorder()?
+        .copy_buffer_to_buffer(&gpu_buffer, &mut cpu_buffer)?
+        .finish()?
+        .submit()?;
 
     let data = cpu_buffer.retrieve()?;
-    debug!("Result data: {:?}", data);
+    debug!("{:?}", data);
 
     Ok(())
 }

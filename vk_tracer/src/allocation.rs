@@ -76,7 +76,7 @@ impl VtDevice {
     }
 }
 
-pub struct VtBuffer<'a, D> {
+pub struct VtBuffer<'a, D: 'a> {
     vma: &'a vk_mem::Allocator,
     pub(crate) buffer: vk::Buffer,
     pub(crate) allocation: vk_mem::Allocation,
@@ -117,6 +117,7 @@ impl<D: Copy> VtBuffer<'_, D> {
                 .flush_allocation(&self.allocation, 0, size as usize)?;
         }
 
+        // Self explanatory
         if need_to_unmap {
             self.vma.unmap_memory(&self.allocation)?;
         }
@@ -165,10 +166,10 @@ impl<D> Drop for VtBuffer<'_, D> {
     }
 }
 
-pub struct VtBufferAndStaging<'a, D> {
+pub struct VtBufferAndStaging<'a, D: 'a> {
     device: &'a VtDevice,
-    staging: VtBuffer<'a, D>,
-    dst: VtBuffer<'a, D>,
+    pub staging: VtBuffer<'a, D>,
+    pub dst: VtBuffer<'a, D>,
 }
 
 impl<'a, D: Copy> VtBufferAndStaging<'a, D> {
@@ -177,11 +178,19 @@ impl<'a, D: Copy> VtBufferAndStaging<'a, D> {
     }
 
     pub fn upload(mut self) -> Result<VtBuffer<'a, D>> {
-        let mut recorder = self.device.get_transient_transfer_recorder()?;
-
-        recorder.copy_buffer_to_buffer(&self.staging, &mut self.dst)?;
-        recorder.submit()?;
+        self
+            .device
+            .get_transient_transfer_recorder()?
+            .copy_buffer_to_buffer(&self.staging, &mut self.dst)?
+            .finish()?
+            .submit()?;
 
         Ok(self.dst)
+    }
+}
+
+impl<'a, D> VtBufferAndStaging<'a, D> {
+    pub fn into_inner(self) -> VtBuffer<'a, D> {
+        self.dst
     }
 }

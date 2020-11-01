@@ -5,12 +5,7 @@ use raw_window_handle::HasRawWindowHandle;
 #[cfg(feature = "ext-debug")]
 use crate::debug_utils::VtDebugUtils;
 
-use crate::{
-    errors::Result,
-    extensions::{vk_required_instance_extensions, vk_required_instance_extensions_with_surface},
-    utils::str_to_cstr,
-    VULKAN_VERSION,
-};
+use crate::{errors::Result, utils::str_to_cstr, VULKAN_VERSION};
 use ash::{
     version::{EntryV1_0, InstanceV1_0},
     vk,
@@ -53,9 +48,9 @@ impl VtInstance {
             .api_version(VULKAN_VERSION);
 
         let extension_names = if let Some(window) = window {
-            vk_required_instance_extensions_with_surface(window)?
+            Self::required_extensions_with_surface(window)?
         } else {
-            vk_required_instance_extensions()
+            Self::required_extensions()
         };
 
         let create_info = vk::InstanceCreateInfo::builder()
