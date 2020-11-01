@@ -8,10 +8,8 @@ use ash::{version::InstanceV1_0, vk};
 use log::{debug, error, info};
 
 use crate::{
-    errors::VtError,
-    surface::{choose_surface_format, VtSurface},
-    utils::cstr_to_str,
-    VULKAN_VERSION, VULKAN_VERSION_STR,
+    errors::VtError, surface::choose_surface_format, utils::cstr_to_str, VULKAN_VERSION,
+    VULKAN_VERSION_STR,
 };
 
 #[derive(Debug)]
@@ -71,17 +69,18 @@ pub(crate) fn pick_physical_device(
 
             let surface_formats = requirements.compatible_surface.as_ref().map(|surface| {
                 surface
-                .loader
-                .get_physical_device_surface_formats(physical_device, surface.handle)
-                .expect("Faild to get surface formats")
+                    .loader
+                    .get_physical_device_surface_formats(physical_device, surface.handle)
+                    .expect("Faild to get surface formats")
             });
             let surface_format_properties = surface_formats.as_ref().map(|surface_formats| {
                 surface_formats
-                .iter()
-                .map(|format| {
-                    instance.get_physical_device_format_properties(physical_device, format.format)
-                })
-                .collect::<Vec<_>>()
+                    .iter()
+                    .map(|format| {
+                        instance
+                            .get_physical_device_format_properties(physical_device, format.format)
+                    })
+                    .collect::<Vec<_>>()
             });
             let surface_present_modes = requirements.compatible_surface.as_ref().map(|surface| {
                 surface
@@ -180,8 +179,9 @@ fn process_physical_device(
     // *** Check swapchain formats
     debug!(" Checking swapchain formats...");
 
-    if let (Some(surface_formats), Some(surface_format_properties)) = (&info.surface_formats, &info.surface_format_properties) {
-
+    if let (Some(surface_formats), Some(surface_format_properties)) =
+        (&info.surface_formats, &info.surface_format_properties)
+    {
         debug!("  Available formats:");
         for format in surface_formats.iter() {
             debug!(
@@ -190,18 +190,15 @@ fn process_physical_device(
             );
         }
 
-        if let Some(format) = choose_surface_format(
-            &surface_formats,
-            &surface_format_properties,
-            requirements,
-        ) {
+        if let Some(format) =
+            choose_surface_format(&surface_formats, &surface_format_properties, requirements)
+        {
             debug!(" - Format {:?} [OK]", format.format);
             debug!(" - Color space {:?} [OK]", format.color_space);
         } else {
             debug!(" - Can't find the required color space and format !");
             return None;
         }
-
     } else {
         debug!("  No surface provided, skipping.")
     }
@@ -241,15 +238,22 @@ fn process_physical_device(
         .iter()
         .enumerate()
         .find(|(index, _)| unsafe {
-            requirements.compatible_surface.as_ref().map_or(true, |surface| {
-                surface
-                    .loader
-                    .get_physical_device_surface_support(info.handle, *index as u32, surface.handle)
-                    .unwrap_or_else(|err| {
-                        error!(" - Failed to get surface support because of {:?}", err);
-                        false
-                    })
-            })
+            requirements
+                .compatible_surface
+                .as_ref()
+                .map_or(true, |surface| {
+                    surface
+                        .loader
+                        .get_physical_device_surface_support(
+                            info.handle,
+                            *index as u32,
+                            surface.handle,
+                        )
+                        .unwrap_or_else(|err| {
+                            error!(" - Failed to get surface support because of {:?}", err);
+                            false
+                        })
+                })
         })
         .map(|(index, &properties)| QueueFamilyInfo {
             index: index as u32,

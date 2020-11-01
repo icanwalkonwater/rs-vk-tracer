@@ -14,4 +14,6 @@ pub enum VtError {
     NoSuitableAdapter,
     #[error("VMA error")]
     Vma(#[from] vk_mem::Error),
+    #[error("Command buffer already submitted !")]
+    CommandBufferAlreadySubmitted,
 }

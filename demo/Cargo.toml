@@ -8,4 +8,5 @@ edition = "2018"
 vk_tracer = { path = "../vk_tracer", features = ["ext-debug"] }
 winit = "^0.23.0"
 anyhow = "^1.0.33"
+log = "^0.4.11"
 simplelog = "^0.8.0"

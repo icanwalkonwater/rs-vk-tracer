@@ -28,7 +28,10 @@ pub struct VtAdapterRequirements {
 }
 
 impl VtAdapterRequirements {
-    pub fn default_from_window(surface: VtSurface, window: &impl HasRawWindowHandle) -> Result<Self> {
+    pub fn default_from_window(
+        surface: VtSurface,
+        window: &impl HasRawWindowHandle,
+    ) -> Result<Self> {
         Ok(Self {
             compatible_surface: Some(surface),
             instance_extensions: vk_required_instance_extensions_with_surface(window)?,
@@ -60,8 +63,7 @@ pub struct VtAdapter(
 );
 
 impl VtInstance {
-    pub fn request_adapter(
-        &self, requirements: VtAdapterRequirements) -> Result<VtAdapter> {
+    pub fn request_adapter(&self, requirements: VtAdapterRequirements) -> Result<VtAdapter> {
         let adapter = pick_physical_device(&self.instance, &requirements)?;
 
         Ok(VtAdapter(adapter.info.handle, adapter, requirements))

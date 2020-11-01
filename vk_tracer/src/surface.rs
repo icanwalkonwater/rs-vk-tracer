@@ -88,8 +88,18 @@ impl VtSurface {
         self.format = format.format;
         self.color_space = format.color_space;
 
-        let min_extent = adapter.1.info.surface_capabilities.unwrap().min_image_extent;
-        let max_extent = adapter.1.info.surface_capabilities.unwrap().max_image_extent;
+        let min_extent = adapter
+            .1
+            .info
+            .surface_capabilities
+            .unwrap()
+            .min_image_extent;
+        let max_extent = adapter
+            .1
+            .info
+            .surface_capabilities
+            .unwrap()
+            .max_image_extent;
 
         let corrected_width = clamp(self.extent.width, min_extent.width, max_extent.width);
         let corrected_height = clamp(self.extent.height, min_extent.height, max_extent.height);

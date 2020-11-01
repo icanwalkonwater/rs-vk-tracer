@@ -1,10 +1,13 @@
 use std::{ffi::CStr, os::raw::c_char};
 
-use ash::{version::{DeviceV1_0, InstanceV1_0}, vk};
+use ash::{
+    version::{DeviceV1_0, InstanceV1_0},
+    vk,
+};
 
 use crate::{
     adapter::VtAdapter,
-    command_recorder::{QueueFamilyIndices, QueuePool, VtCommandPool},
+    command_recorder::{QueueFamilyIndices, VtCommandPool},
     errors::Result,
     instance::VtInstance,
 };
@@ -96,9 +99,10 @@ impl VtAdapter {
 impl Drop for VtDevice {
     fn drop(&mut self) {
         unsafe {
-            self.handle.destroy_command_pool(self.command_pool.graphics.pool, None);
-            self.handle.destroy_command_pool(self.command_pool.present.pool, None);
-            self.handle.destroy_command_pool(self.command_pool.transfer.pool, None);
+            for queue in self.command_pool.queues.iter() {
+                let queue = queue.lock().expect("Poisoned");
+                self.handle.destroy_command_pool(queue.pool, None);
+            }
 
             self.vma.destroy();
 

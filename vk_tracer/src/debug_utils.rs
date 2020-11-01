@@ -2,7 +2,8 @@ use std::{borrow::Cow, ffi::CStr};
 
 use crate::{errors::Result, prelude::VtDevice, utils::str_to_cstr};
 use ash::{extensions::ext, vk};
-use log::{log, Level};
+use log::{info, log, Level};
+
 pub(crate) struct VtDebugUtils {
     pub loader: ext::DebugUtils,
     messenger: vk::DebugUtilsMessengerEXT,
@@ -20,6 +21,8 @@ impl VtDebugUtils {
                 None,
             )?
         };
+
+        info!("Debug utils setup !");
 
         Ok(Self { loader, messenger })
     }

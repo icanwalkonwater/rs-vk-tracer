@@ -6,7 +6,9 @@ use raw_window_handle::HasRawWindowHandle;
 use crate::debug_utils::VtDebugUtils;
 
 use crate::{
-    errors::Result, extensions::vk_required_instance_extensions_with_surface, utils::str_to_cstr,
+    errors::Result,
+    extensions::{vk_required_instance_extensions, vk_required_instance_extensions_with_surface},
+    utils::str_to_cstr,
     VULKAN_VERSION,
 };
 use ash::{
@@ -32,7 +34,7 @@ pub struct VtInstance {
 }
 
 impl VtInstance {
-    pub fn create(app_info: VtAppInfo, window: &impl HasRawWindowHandle) -> Result<Self> {
+    pub fn create(app_info: VtAppInfo, window: Option<&impl HasRawWindowHandle>) -> Result<Self> {
         let entry = ash::Entry::new()?;
 
         let vk_app_info = vk::ApplicationInfo::builder()
@@ -50,7 +52,11 @@ impl VtInstance {
             })
             .api_version(VULKAN_VERSION);
 
-        let extension_names = vk_required_instance_extensions_with_surface(window)?;
+        let extension_names = if let Some(window) = window {
+            vk_required_instance_extensions_with_surface(window)?
+        } else {
+            vk_required_instance_extensions()
+        };
 
         let create_info = vk::InstanceCreateInfo::builder()
             .application_info(&vk_app_info)
@@ -62,7 +68,7 @@ impl VtInstance {
         let debug_utils = VtDebugUtils::new(&entry, &instance)?;
 
         Ok(Self {
-            entry: entry,
+            entry,
             instance,
             #[cfg(feature = "ext-debug")]
             debug_utils: ManuallyDrop::new(debug_utils),

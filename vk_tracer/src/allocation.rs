@@ -1,22 +1,19 @@
-use std::borrow::Cow;
-
-use crate::device::VtDevice;
-use crate::errors::Result;
+use crate::{device::VtDevice, errors::Result};
 use ash::vk;
 use log::error;
+use std::{ffi, mem};
 
 pub type DeviceSize = vk::DeviceSize;
 pub type BufferUsage = vk::BufferUsageFlags;
 
 #[derive(Default)]
-pub struct BufferDescription<'a> {
-    pub label: Option<Cow<'a, str>>,
+pub struct BufferDescription {
     pub size: DeviceSize,
     pub usage: BufferUsage,
 }
 
 impl VtDevice {
-    pub fn create_buffer(&self, desc: &BufferDescription) -> Result<VtBuffer> {
+    pub fn create_buffer<D>(&self, desc: &BufferDescription) -> Result<VtBuffer<D>> {
         let (buffer, allocation, info) = self.vma.create_buffer(
             &vk::BufferCreateInfo::builder()
                 .size(desc.size)
@@ -28,25 +25,35 @@ impl VtDevice {
             },
         )?;
 
-        #[cfg(feature = "ext-debug")]
-        if let Some(label) = &desc.label {
-            self.name_object(vk::ObjectType::BUFFER, buffer, label)?;
-        }
-
         Ok(VtBuffer {
             vma: &self.vma,
             buffer,
             allocation,
             info,
+            _phantom: Default::default(),
+        })
+    }
+
+    pub fn create_buffer_with_staging<D: Copy>(
+        &self,
+        desc: &BufferDescription,
+    ) -> Result<VtBufferAndStaging<D>> {
+        let dst = self.create_buffer(desc)?;
+        let staging = self.create_staging_buffer_for(&dst)?;
+
+        Ok(VtBufferAndStaging {
+            device: self,
+            staging,
+            dst,
         })
     }
 
     #[inline]
-    pub fn create_staging_buffer_for(&self, buffer: &VtBuffer) -> Result<VtBuffer> {
+    pub fn create_staging_buffer_for<D>(&self, buffer: &VtBuffer<D>) -> Result<VtBuffer<D>> {
         self.create_staging_buffer(buffer.info.get_size() as DeviceSize)
     }
 
-    pub fn create_staging_buffer(&self, size: DeviceSize) -> Result<VtBuffer> {
+    pub fn create_staging_buffer<D>(&self, size: DeviceSize) -> Result<VtBuffer<D>> {
         let (buffer, allocation, info) = self.vma.create_buffer(
             &vk::BufferCreateInfo::builder()
                 .size(size)
@@ -64,32 +71,37 @@ impl VtDevice {
             buffer,
             allocation,
             info,
+            _phantom: Default::default(),
         })
     }
 }
 
-pub struct VtBuffer<'a> {
+pub struct VtBuffer<'a, D> {
     vma: &'a vk_mem::Allocator,
     pub(crate) buffer: vk::Buffer,
     pub(crate) allocation: vk_mem::Allocation,
     pub(crate) info: vk_mem::AllocationInfo,
+    _phantom: std::marker::PhantomData<D>,
 }
 
-impl VtBuffer<'_> {
-    pub fn store<D: Copy>(&self, data: &[D]) -> Result<()> {
-        let (need_to_unmap, mapped_ptr) = if self.info.get_mapped_data().is_null() {
-            (true, self.vma.map_memory(&self.allocation)?)
+impl<D: Copy> VtBuffer<'_, D> {
+    #[inline]
+    fn ensure_mapped(&self) -> Result<(bool, *mut u8)> {
+        if self.info.get_mapped_data().is_null() {
+            Ok((true, self.vma.map_memory(&self.allocation)?))
         } else {
-            (false, self.info.get_mapped_data())
-        };
+            Ok((false, self.info.get_mapped_data()))
+        }
+    }
+
+    pub fn store(&mut self, data: &[D]) -> Result<()> {
+        let (need_to_unmap, mapped_ptr) = self.ensure_mapped()?;
 
         unsafe {
-            use std::{ffi, mem};
-
             // Compute length of data
             let size = (mem::size_of::<D>() * data.len()) as DeviceSize;
 
-            // Make sure to respect alignement requirements
+            // Make sure to respect alignment requirements
             let mut mapped_slice = ash::util::Align::new(
                 mapped_ptr as *mut ffi::c_void,
                 mem::align_of::<D>() as DeviceSize,
@@ -100,7 +112,7 @@ impl VtBuffer<'_> {
             mapped_slice.copy_from_slice(data);
 
             // Flush
-            // Will be ignored of the memory is HOST_COHERANT
+            // Will be ignored of the memory is HOST_COHERENT
             self.vma
                 .flush_allocation(&self.allocation, 0, size as usize)?;
         }
@@ -111,16 +123,41 @@ impl VtBuffer<'_> {
 
         Ok(())
     }
+
+    pub fn retrieve(&self) -> Result<Vec<D>> {
+        let (need_to_unmap, mapped_ptr) = self.ensure_mapped()?;
+
+        let data = unsafe {
+            // Compute length of data
+            let size = (self.info.get_size() / mem::size_of::<D>()) as DeviceSize;
+
+            // Make sure to respect alignment requirements
+            let mut mapped_slice = ash::util::Align::new(
+                mapped_ptr as *mut ffi::c_void,
+                mem::align_of::<D>() as DeviceSize,
+                size,
+            );
+
+            // Copy the data
+            mapped_slice.iter_mut().map(|a| *a).collect()
+        };
+
+        if need_to_unmap {
+            self.vma.unmap_memory(&self.allocation)?;
+        }
+
+        Ok(data)
+    }
 }
 
-impl PartialEq for VtBuffer<'_> {
+impl<D> PartialEq for VtBuffer<'_, D> {
     fn eq(&self, other: &Self) -> bool {
         // Don't check the content for obvious reasons
         self.buffer == other.buffer && self.info.get_offset() == other.info.get_offset()
     }
 }
 
-impl Drop for VtBuffer<'_> {
+impl<D> Drop for VtBuffer<'_, D> {
     fn drop(&mut self) {
         if let Err(err) = self.vma.destroy_buffer(self.buffer, &self.allocation) {
             error!("VMA Free Error: {}", err);
@@ -128,18 +165,23 @@ impl Drop for VtBuffer<'_> {
     }
 }
 
-pub struct VtStagingBuffer<'a, D: Copy> {
-    staging: VtBuffer<'a>,
-    dest: VtBuffer<'a>,
-    _marker: std::marker::PhantomData<D>,
+pub struct VtBufferAndStaging<'a, D> {
+    device: &'a VtDevice,
+    staging: VtBuffer<'a, D>,
+    dst: VtBuffer<'a, D>,
 }
 
-impl<'a, D: Copy> VtStagingBuffer<'a, D> {
-    pub fn store(&self, data: &[D]) -> Result<()> {
+impl<'a, D: Copy> VtBufferAndStaging<'a, D> {
+    pub fn stage(&mut self, data: &[D]) -> Result<()> {
         self.staging.store(data)
     }
 
-    pub fn upload(self) -> Result<VtBuffer<'a>> {
-        Ok(self.dest)
+    pub fn upload(mut self) -> Result<VtBuffer<'a, D>> {
+        let mut recorder = self.device.get_transient_transfer_recorder()?;
+
+        recorder.copy_buffer_to_buffer(&self.staging, &mut self.dst)?;
+        recorder.submit()?;
+
+        Ok(self.dst)
     }
 }
