@@ -3,6 +3,7 @@ mod utils;
 
 pub mod adapter;
 pub mod allocation;
+pub mod buffers;
 pub mod command_recorder;
 #[cfg(feature = "ext-debug")]
 mod debug_utils;
@@ -17,10 +18,11 @@ pub mod raw_window_handle {
 }
 
 pub mod prelude {
-    use crate::{adapter, allocation, device, errors, instance, surface};
+    use crate::{adapter, allocation, buffers, device, errors, instance, surface};
 
     pub use adapter::*;
     pub use allocation::*;
+    pub use buffers::*;
     pub use device::*;
     pub use errors::*;
     pub use instance::*;

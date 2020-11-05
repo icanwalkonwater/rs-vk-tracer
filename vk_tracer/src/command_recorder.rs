@@ -1,10 +1,11 @@
 use ash::{version::DeviceV1_0, vk};
-use log::{error, warn};
+use log::warn;
 
 use crate::{
-    allocation::{DeviceSize, VtBuffer},
+    allocation::DeviceSize,
+    buffers::{VtBuffer, VtBufferMut},
     device::VtDevice,
-    errors::{Result, VtError},
+    errors::Result,
     physical_device_selection::VtAdapterInfo,
 };
 use std::sync::{Mutex, MutexGuard};
@@ -203,7 +204,7 @@ impl VtDevice {
         Ok(VtTransferRecorder {
             device: &self,
             queue_pool,
-            pool,
+            _pool: pool,
             buffer: command_buffer,
             has_been_ended: false,
             _marker: Default::default(),
@@ -211,24 +212,41 @@ impl VtDevice {
     }
 }
 
+pub trait VtTransferCommands<'a>: Sized {
+    fn copy_buffer_to_buffer<'b, D: 'b>(
+        &mut self,
+        src: impl Into<VtBuffer<'b, 'a, D>>,
+        dst: impl Into<VtBufferMut<'b, 'a, D>>,
+    ) -> Result<()>
+    where
+        'b: 'a;
+}
+
 pub struct VtTransferRecorder<'a> {
     device: &'a VtDevice,
     queue_pool: &'a QueuePool,
-    pool: MutexGuard<'a, vk::CommandPool>,
+    _pool: MutexGuard<'a, vk::CommandPool>,
     buffer: vk::CommandBuffer,
+    #[cfg(feature = "ext-debug")]
     has_been_ended: bool,
     // Mark !Sync + !Send
     _marker: std::marker::PhantomData<std::cell::UnsafeCell<()>>,
 }
 
-impl<'a> VtTransferRecorder<'a> {
-    pub fn copy_buffer_to_buffer<'b, D>(
-        mut self,
-        src: &'b VtBuffer<D>,
-        dst: &'b mut VtBuffer<D>,
-    ) -> Result<Self>
+impl<'a> VtTransferCommands<'a> for VtTransferRecorder<'a> {
+    fn copy_buffer_to_buffer<'b, D: 'b>(
+        &mut self,
+        src: impl Into<VtBuffer<'b, 'a, D>>,
+        dst: impl Into<VtBufferMut<'b, 'a, D>>,
+    ) -> Result<()>
     where
         'b: 'a, {
+        let src = src.into();
+        let src = src.data();
+
+        let mut dst = dst.into();
+        let dst = dst.data_mut();
+
         unsafe {
             let region = [vk::BufferCopy::builder()
                 .src_offset(src.info.get_offset() as DeviceSize)
@@ -241,9 +259,11 @@ impl<'a> VtTransferRecorder<'a> {
                 .cmd_copy_buffer(self.buffer, src.buffer, dst.buffer, &region);
         }
 
-        Ok(self)
+        Ok(())
     }
+}
 
+impl<'a> VtTransferRecorder<'a> {
     pub fn finish(mut self) -> Result<VtRecorderFinished<'a>> {
         unsafe {
             self.device.handle.end_command_buffer(self.buffer)?;
@@ -259,6 +279,7 @@ impl<'a> VtTransferRecorder<'a> {
     }
 }
 
+#[cfg(feature = "ext-debug")]
 impl Drop for VtTransferRecorder<'_> {
     fn drop(&mut self) {
         if !self.has_been_ended {

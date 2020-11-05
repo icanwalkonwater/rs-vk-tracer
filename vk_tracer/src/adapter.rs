@@ -1,3 +1,7 @@
+//! # Adapters
+//! [VtAdapter]s are the equivalent of a Vulkan physical device but with all the information queryable
+//! already cached inside.
+
 use std::{ffi::CStr, os::raw::c_char};
 
 use ash::vk;

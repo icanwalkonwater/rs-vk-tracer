@@ -2,7 +2,7 @@ use log::debug;
 use simplelog::{
     ConfigBuilder, LevelFilter, LevelPadding, SimpleLogger, TermLogger, TerminalMode, ThreadLogMode,
 };
-use vk_tracer::prelude::*;
+use vk_tracer::{command_recorder::VtTransferCommands, prelude::*};
 // use winit::{event_loop::EventLoop, window::WindowBuilder};
 use winit::window::Window;
 
@@ -67,11 +67,11 @@ fn main() -> anyhow::Result<()> {
 
     let mut cpu_buffer = device.create_staging_buffer_for(&gpu_buffer)?;
 
-    device
-        .get_transient_transfer_recorder()?
-        .copy_buffer_to_buffer(&gpu_buffer, &mut cpu_buffer)?
-        .finish()?
-        .submit()?;
+    let mut recorder = device.get_transient_transfer_recorder()?;
+
+    recorder.copy_buffer_to_buffer(&gpu_buffer, &mut cpu_buffer)?;
+
+    recorder.finish()?.submit()?;
 
     let data = cpu_buffer.retrieve()?;
     debug!("{:?}", data);
