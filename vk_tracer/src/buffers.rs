@@ -11,55 +11,56 @@ use crate::{
     allocation::DeviceSize, command_recorder::VtTransferCommands, device::VtDevice, errors::Result,
 };
 
-pub struct VtGpuBuffer<'a, D: 'a>(pub(crate) VtBufferData<'a, D>);
-
-pub struct VtCpuBuffer<'a, D: 'a>(pub(crate) VtBufferData<'a, D>);
+pub struct VtGpuBuffer<'data, D: 'data>(pub(crate) VtBufferData<'data, D>);
+pub struct VtCpuBuffer<'data, D: 'data>(pub(crate) VtBufferData<'data, D>);
 
 #[derive(Copy, Clone)]
-pub enum VtBuffer<'a: 'b, 'b, D: 'a> {
-    Gpu(&'b VtGpuBuffer<'a, D>),
-    Cpu(&'b VtCpuBuffer<'a, D>),
+pub enum VtBuffer<'ptr, 'data: 'ptr, D: 'data> {
+    Gpu(&'ptr VtGpuBuffer<'data, D>),
+    Cpu(&'ptr VtCpuBuffer<'data, D>),
 }
 
-impl<'a: 'b, 'b, D: 'a> From<&'b VtCpuBuffer<'a, D>> for VtBuffer<'a, 'b, D> {
-    fn from(buff: &'b VtCpuBuffer<'a, D>) -> Self {
-        VtBuffer::Cpu(buff)
-    }
+macro_rules! impl_from_buffer {
+    ($buff_ty:ident, $ty:ident) => {
+        impl<'ptr, 'data: 'ptr, D: 'data> From<&'ptr $buff_ty<'data, D>> for $crate::buffers::VtBuffer<'ptr, 'data, D> {
+            fn from(buff: &'ptr $buff_ty<'data, D>) -> Self {
+                $crate::buffers::VtBuffer::$ty(buff)
+            }
+        }
+    };
 }
 
-impl<'a: 'b, 'b, D: 'a> From<&'b VtGpuBuffer<'a, D>> for VtBuffer<'a, 'b, D> {
-    fn from(buff: &'b VtGpuBuffer<'a, D>) -> Self {
-        VtBuffer::Gpu(buff)
-    }
-}
+impl_from_buffer!(VtCpuBuffer, Cpu);
+impl_from_buffer!(VtGpuBuffer, Gpu);
 
-pub enum VtBufferMut<'a: 'b, 'b, D: 'a> {
-    Gpu(&'b mut VtGpuBuffer<'a, D>),
-    Cpu(&'b mut VtCpuBuffer<'a, D>),
-}
-
-impl<'a: 'b, 'b, D: 'a> From<&'b mut VtCpuBuffer<'a, D>> for VtBufferMut<'a, 'b, D> {
-    fn from(buff: &'b mut VtCpuBuffer<'a, D>) -> Self {
-        VtBufferMut::Cpu(buff)
-    }
-}
-
-impl<'a: 'b, 'b, D: 'a> From<&'b mut VtGpuBuffer<'a, D>> for VtBufferMut<'a, 'b, D> {
-    fn from(buff: &'b mut VtGpuBuffer<'a, D>) -> Self {
-        VtBufferMut::Gpu(buff)
-    }
-}
-
-impl<'a: 'b, 'b, D: 'a> VtBuffer<'a, 'b, D> {
-    pub(crate) fn data(&self) -> &VtBufferData<'a, D> {
+impl<'ptr, 'data: 'ptr, D: 'data> AsRef<VtBufferData<'data, D>> for VtBuffer<'ptr, 'data, D> {
+    fn as_ref(&self) -> &VtBufferData<'data, D> {
         match self {
             Self::Gpu(VtGpuBuffer(data)) | Self::Cpu(VtCpuBuffer(data)) => data,
         }
     }
 }
 
-impl<'a: 'b, 'b, D: 'a> VtBufferMut<'a, 'b, D> {
-    pub(crate) fn data_mut(&mut self) -> &mut VtBufferData<'a, D> {
+pub enum VtBufferMut<'ptr, 'data: 'ptr, D: 'data> {
+    Gpu(&'ptr mut VtGpuBuffer<'data, D>),
+    Cpu(&'ptr mut VtCpuBuffer<'data, D>),
+}
+
+macro_rules! impl_from_buffer_mut {
+    ($buff_ty:ident, $ty:ident) => {
+        impl<'ptr, 'data: 'ptr, D: 'data> From<&'ptr mut $buff_ty<'data, D>> for $crate::buffers::VtBufferMut<'ptr, 'data, D> {
+            fn from(buff: &'ptr mut $buff_ty<'data, D>) -> Self {
+                $crate::buffers::VtBufferMut::$ty(buff)
+            }
+        }
+    };
+}
+
+impl_from_buffer_mut!(VtCpuBuffer, Cpu);
+impl_from_buffer_mut!(VtGpuBuffer, Gpu);
+
+impl<'ptr, 'data: 'ptr, D: 'data> AsMut<VtBufferData<'data, D>> for VtBufferMut<'ptr, 'data, D> {
+    fn as_mut(&mut self) -> &mut VtBufferData<'data, D> {
         match self {
             Self::Gpu(VtGpuBuffer(data)) | Self::Cpu(VtCpuBuffer(data)) => data,
         }

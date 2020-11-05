@@ -206,20 +206,19 @@ impl VtDevice {
             queue_pool,
             _pool: pool,
             buffer: command_buffer,
+            #[cfg(feature = "ext-debug")]
             has_been_ended: false,
             _marker: Default::default(),
         })
     }
 }
 
-pub trait VtTransferCommands<'a>: Sized {
-    fn copy_buffer_to_buffer<'b, D: 'b>(
+pub trait VtTransferCommands<'ptr>: Sized {
+    fn copy_buffer_to_buffer<'data: 'ptr, D: 'data>(
         &mut self,
-        src: impl Into<VtBuffer<'b, 'a, D>>,
-        dst: impl Into<VtBufferMut<'b, 'a, D>>,
-    ) -> Result<()>
-    where
-        'b: 'a;
+        src: impl Into<VtBuffer<'ptr,'data, D>>,
+        dst: impl Into<VtBufferMut<'ptr, 'data, D>>,
+    ) -> Result<()>;
 }
 
 pub struct VtTransferRecorder<'a> {
@@ -233,19 +232,16 @@ pub struct VtTransferRecorder<'a> {
     _marker: std::marker::PhantomData<std::cell::UnsafeCell<()>>,
 }
 
-impl<'a> VtTransferCommands<'a> for VtTransferRecorder<'a> {
-    fn copy_buffer_to_buffer<'b, D: 'b>(
+impl<'ptr> VtTransferCommands<'ptr> for VtTransferRecorder<'ptr> {
+    fn copy_buffer_to_buffer<'data: 'ptr, D: 'data>(
         &mut self,
-        src: impl Into<VtBuffer<'b, 'a, D>>,
-        dst: impl Into<VtBufferMut<'b, 'a, D>>,
-    ) -> Result<()>
-    where
-        'b: 'a, {
+        src: impl Into<VtBuffer<'ptr, 'data, D>>,
+        dst: impl Into<VtBufferMut<'ptr, 'data, D>>,
+    ) -> Result<()> {
         let src = src.into();
-        let src = src.data();
-
+        let src = src.as_ref();
         let mut dst = dst.into();
-        let dst = dst.data_mut();
+        let dst = dst.as_mut();
 
         unsafe {
             let region = [vk::BufferCopy::builder()
@@ -269,7 +265,10 @@ impl<'a> VtTransferRecorder<'a> {
             self.device.handle.end_command_buffer(self.buffer)?;
         }
 
-        self.has_been_ended = true;
+        #[cfg(feature = "ext-debug")]
+        {
+            self.has_been_ended = true;
+        }
 
         Ok(VtRecorderFinished {
             device: self.device,
