@@ -1,3 +1,17 @@
+//! Abstraction to easily manage descriptor sets.
+//!
+//! You need to query a [VtDescriptorSetManager] from a [VtDevice]
+//! and it will automatically allocate the request descriptor sets.
+//!
+//! The [VtDescriptorSetManager] is thread-safe.
+//!
+//! You can then use this manager to retrieve your sets for binding.
+//!
+//! You can also batch-write to them but it will not statically check that
+//! you are writing the correct thing in the correct binding.
+//! 
+//! TODO: Panic when ext-debug is enabled.
+
 use crate::allocation::DeviceSize;
 use crate::buffers::{VtRawBufferHandle};
 use crate::errors::VtError;
