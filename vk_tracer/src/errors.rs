@@ -16,4 +16,6 @@ pub enum VtError {
     Vma(#[from] vk_mem::Error),
     #[error("Command buffer already submitted !")]
     CommandBufferAlreadySubmitted,
+    #[error("Malformed descriptor sets description, set indices must follow each other without gaps")]
+    MalformedDescriptorSetsDescription,
 }

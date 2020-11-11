@@ -187,7 +187,7 @@ impl VtCommandPool {
 }
 
 impl VtDevice {
-    pub fn get_transient_transfer_recorder(&self) -> Result<VtTransferRecorder> {
+    pub fn get_transient_transfer_encoder(&self) -> Result<VtTransferRecorder> {
         let queue_pool = self.command_pool.transfer();
         let pool = queue_pool.pool.lock().expect("Poisoned");
 
@@ -216,7 +216,7 @@ impl VtDevice {
 pub trait VtTransferCommands<'ptr>: Sized {
     fn copy_buffer_to_buffer<'data: 'ptr, D: 'data>(
         &mut self,
-        src: impl Into<VtBuffer<'ptr,'data, D>>,
+        src: impl Into<VtBuffer<'ptr, 'data, D>>,
         dst: impl Into<VtBufferMut<'ptr, 'data, D>>,
     ) -> Result<()>;
 }
@@ -229,6 +229,7 @@ pub struct VtTransferRecorder<'a> {
     #[cfg(feature = "ext-debug")]
     has_been_ended: bool,
     // Mark !Sync + !Send
+    // TODO: to it the proper way when its stable
     _marker: std::marker::PhantomData<std::cell::UnsafeCell<()>>,
 }
 
