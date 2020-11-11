@@ -99,7 +99,9 @@ pub struct VtRawBufferHandle<'a> {
 macro_rules! impl_to_raw_handle {
     ($buff:ident) => {
         impl<'a, D: 'a> $buff<'a, D> {
-            pub fn raw_handle<'b>(&self) -> $crate::buffers::VtRawBufferHandle<'b> where 'a: 'b {
+            pub fn raw_handle<'b>(&self) -> $crate::buffers::VtRawBufferHandle<'b>
+            where
+                'a: 'b, {
                 $crate::buffers::VtRawBufferHandle {
                     buffer: self.0.buffer,
                     info: self.0.info.clone(),

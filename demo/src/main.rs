@@ -4,8 +4,11 @@ use simplelog::{
 };
 use vk_tracer::{command_recorder::VtTransferCommands, prelude::*};
 // use winit::{event_loop::EventLoop, window::WindowBuilder};
+use vk_tracer::descriptor_sets::{
+    DescriptorSetBindingDescription, DescriptorSetBindingWriteDescription,
+    DescriptorSetDescription, DescriptorType, ShaderStage,
+};
 use winit::window::Window;
-use vk_tracer::descriptor_sets::{DescriptorType, ShaderStage, DescriptorSetDescription, DescriptorSetBindingDescription, DescriptorSetBindingWriteDescription};
 
 const LOG_LEVEL: LevelFilter = LevelFilter::Trace;
 
@@ -96,11 +99,11 @@ fn create_descriptor_set(device: &VtDevice) -> anyhow::Result<()> {
 
     #[derive(Copy, Clone, Eq, PartialEq, Hash)]
     enum SetNames {
-        Main
+        Main,
     }
 
-    let descriptor_set_manager = device.create_descriptor_set_manager(&[
-        DescriptorSetDescription {
+    let descriptor_set_manager =
+        device.create_descriptor_set_manager(&[DescriptorSetDescription {
             key: SetNames::Main,
             bindings: vec![
                 DescriptorSetBindingDescription {
@@ -115,9 +118,8 @@ fn create_descriptor_set(device: &VtDevice) -> anyhow::Result<()> {
                     len: 1,
                     stages: ShaderStage::COMPUTE,
                 },
-            ]
-        }
-    ])?;
+            ],
+        }])?;
 
     let mut out_buffer = device.create_buffer::<u32>(&BufferDescription {
         size: (std::mem::size_of::<u32>() * 16) as DeviceSize,
@@ -133,16 +135,19 @@ fn create_descriptor_set(device: &VtDevice) -> anyhow::Result<()> {
     values_buffer.upload()?;
     let values_buffer = values_buffer.into_dst();
 
-    descriptor_set_manager.write_set(SetNames::Main, &[
-        DescriptorSetBindingWriteDescription::Buffer {
-            binding: 0,
-            buffer: out_buffer.raw_handle()
-        },
-        DescriptorSetBindingWriteDescription::Buffer {
-            binding: 1,
-            buffer: values_buffer.raw_handle(),
-        }
-    ]);
+    descriptor_set_manager.write_set(
+        SetNames::Main,
+        &[
+            DescriptorSetBindingWriteDescription::Buffer {
+                binding: 0,
+                buffer: out_buffer.raw_handle(),
+            },
+            DescriptorSetBindingWriteDescription::Buffer {
+                binding: 1,
+                buffer: values_buffer.raw_handle(),
+            },
+        ],
+    );
 
     debug!("Everything went fine");
     Ok(())

@@ -7,12 +7,12 @@ pub mod buffers;
 pub mod command_recorder;
 #[cfg(feature = "ext-debug")]
 mod debug_utils;
+pub mod descriptor_sets;
 pub mod device;
 pub mod extensions;
 pub mod instance;
 mod physical_device_selection;
 pub mod surface;
-pub mod descriptor_sets;
 
 pub mod raw_window_handle {
     pub use raw_window_handle::*;

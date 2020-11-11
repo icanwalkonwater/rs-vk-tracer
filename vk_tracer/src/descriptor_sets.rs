@@ -9,19 +9,22 @@
 //!
 //! You can also batch-write to them but it will not statically check that
 //! you are writing the correct thing in the correct binding.
-//! 
+//!
 //! TODO: Panic when ext-debug is enabled.
 
-use crate::allocation::DeviceSize;
-use crate::buffers::{VtRawBufferHandle};
-use crate::errors::VtError;
-use crate::{device::VtDevice, errors::Result};
-use ash::version::DeviceV1_0;
-use ash::vk;
-use std::collections::HashMap;
-use std::pin::Pin;
-use std::hash::Hash;
-use std::sync::{RwLock, RwLockReadGuard};
+use crate::{
+    allocation::DeviceSize,
+    buffers::VtRawBufferHandle,
+    device::VtDevice,
+    errors::{Result, VtError},
+};
+use ash::{version::DeviceV1_0, vk};
+use std::{
+    collections::HashMap,
+    hash::Hash,
+    pin::Pin,
+    sync::{RwLock, RwLockReadGuard},
+};
 
 // Some aliases from ash
 pub type DescriptorType = vk::DescriptorType;
@@ -75,10 +78,7 @@ impl<K: Copy + Eq + Hash> VtDescriptorSetManager<'_, K> {
         sets: &[DescriptorSetDescription<K>],
     ) -> Result<VtDescriptorSetManager<'a, K>> {
         let sets_desc = sets.to_vec();
-        let set_names = sets_desc
-            .iter()
-            .map(|desc| desc.key)
-            .collect::<Vec<_>>();
+        let set_names = sets_desc.iter().map(|desc| desc.key).collect::<Vec<_>>();
 
         let sizes = Self::compute_sizes(&sets_desc);
 
@@ -121,24 +121,28 @@ impl<K: Copy + Eq + Hash> VtDescriptorSetManager<'_, K> {
                     // Binding types is a Vec with empty spaces where there a no bindings.
                     // That way we allow jumps in the binding indices and avoid a HashMap.
                     // But I hate the guy who uses binding=1510 with all my heart.
-                    let binding_types = desc.bindings
-                        .iter()
-                        .fold(Vec::with_capacity(desc.bindings.len()), |mut acc, item| {
+                    let binding_types = desc.bindings.iter().fold(
+                        Vec::with_capacity(desc.bindings.len()),
+                        |mut acc, item| {
                             while acc.len() < (item.binding - 1) as usize {
                                 acc.push(DescriptorType::default());
                             }
                             acc[item.binding as usize] = item.ty;
                             acc
-                        });
+                        },
+                    );
 
-                    (name, RwLock::new(VtDescriptorSet {
-                        set,
-                        layout,
-                        binding_types,
-                        #[cfg(feature = "ext-debug")]
-                        _desc: desc.bindings,
-                        _phantom: Default::default()
-                    }))
+                    (
+                        name,
+                        RwLock::new(VtDescriptorSet {
+                            set,
+                            layout,
+                            binding_types,
+                            #[cfg(feature = "ext-debug")]
+                            _desc: desc.bindings,
+                            _phantom: Default::default(),
+                        }),
+                    )
                 })
                 .collect()
         };
@@ -213,7 +217,7 @@ pub struct VtDescriptorSet<'a> {
     binding_types: Vec<DescriptorType>,
     #[cfg(feature = "ext-debug")]
     _desc: Vec<DescriptorSetBindingDescription>,
-    _phantom: std::marker::PhantomData<&'a ()>
+    _phantom: std::marker::PhantomData<&'a ()>,
 }
 
 /// Represent a write operation to a descriptor set binding.
@@ -257,13 +261,11 @@ impl<'a, K: Copy + Eq + Hash> VtDescriptorSetManager<'a, K> {
         for write in writes_desc {
             match write {
                 DescriptorSetBindingWriteDescription::Buffer { buffer, .. } => {
-                    buffer_info_storage.push([
-                        vk::DescriptorBufferInfo::builder()
-                            .buffer(buffer.buffer)
-                            .offset(buffer.info.get_offset() as DeviceSize)
-                            .range(buffer.info.get_size() as DeviceSize)
-                            .build()
-                    ]);
+                    buffer_info_storage.push([vk::DescriptorBufferInfo::builder()
+                        .buffer(buffer.buffer)
+                        .offset(buffer.info.get_offset() as DeviceSize)
+                        .range(buffer.info.get_size() as DeviceSize)
+                        .build()]);
 
                     buffer_writes.push(write.clone());
                 }
@@ -283,7 +285,7 @@ impl<'a, K: Copy + Eq + Hash> VtDescriptorSetManager<'a, K> {
                             .dst_binding(binding)
                             .dst_array_element(0)
                             .descriptor_type(set.binding_types[binding as usize])
-                            .buffer_info(&buffer_info_storage[i])
+                            .buffer_info(&buffer_info_storage[i]),
                     );
                 }
                 _ => unreachable!(),
@@ -302,11 +304,13 @@ impl<K: Copy + Eq + Hash> Drop for VtDescriptorSetManager<'_, K> {
     fn drop(&mut self) {
         unsafe {
             // Acquire and free sets
-            let sets_lock = self.sets.values().map(|set| set.write().unwrap()).collect::<Vec<_>>();
+            let sets_lock = self
+                .sets
+                .values()
+                .map(|set| set.write().unwrap())
+                .collect::<Vec<_>>();
             let sets = sets_lock.iter().map(|s| s.set).collect::<Vec<_>>();
-            self.device
-                .handle
-                .free_descriptor_sets(self.pool, &sets);
+            self.device.handle.free_descriptor_sets(self.pool, &sets);
 
             // Destroy layouts
             for layout in sets_lock.iter().map(|s| s.layout) {
