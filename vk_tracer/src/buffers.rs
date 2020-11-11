@@ -87,14 +87,31 @@ impl_from_buffer!(VtGpuBuffer, Gpu);
 impl_from_buffer!(mut VtCpuBuffer, Cpu);
 impl_from_buffer!(mut VtGpuBuffer, Gpu);
 
-/// Inner data of every Vulkan buffer.
-pub(crate) struct VtBufferData<'a, D: 'a> {
-    pub vma: &'a vk_mem::Allocator,
-    pub buffer: vk::Buffer,
-    pub allocation: vk_mem::Allocation,
-    pub info: vk_mem::AllocationInfo,
-    pub _phantom: std::marker::PhantomData<D>,
+/// Raw buffer, temporary handle to a [VtBuffer].
+/// Used to bypass the `D` generic in other buffers.
+#[derive(Clone)]
+pub struct VtRawBufferHandle<'a> {
+    pub(crate) buffer: vk::Buffer,
+    pub(crate) info: vk_mem::AllocationInfo,
+    _phantom: std::marker::PhantomData<&'a ()>,
 }
+
+macro_rules! impl_to_raw_handle {
+    ($buff:ident) => {
+        impl<'a, D: 'a> $buff<'a, D> {
+            pub fn raw_handle<'b>(&self) -> $crate::buffers::VtRawBufferHandle<'b> where 'a: 'b {
+                $crate::buffers::VtRawBufferHandle {
+                    buffer: self.0.buffer,
+                    info: self.0.info.clone(),
+                    _phantom: Default::default(),
+                }
+            }
+        }
+    };
+}
+
+impl_to_raw_handle!(VtCpuBuffer);
+impl_to_raw_handle!(VtGpuBuffer);
 
 impl<D: Copy> VtCpuBuffer<'_, D> {
     #[inline]
@@ -163,6 +180,15 @@ impl<D: Copy> VtCpuBuffer<'_, D> {
 
         Ok(data)
     }
+}
+
+/// Inner data of every Vulkan buffer.
+pub(crate) struct VtBufferData<'a, D: 'a> {
+    pub vma: &'a vk_mem::Allocator,
+    pub buffer: vk::Buffer,
+    pub allocation: vk_mem::Allocation,
+    pub info: vk_mem::AllocationInfo,
+    pub _phantom: std::marker::PhantomData<D>,
 }
 
 impl<D> PartialEq for VtBufferData<'_, D> {

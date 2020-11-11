@@ -92,11 +92,16 @@ fn copy_back_and_forth(device: &VtDevice) -> anyhow::Result<()> {
 }
 
 fn create_descriptor_set(device: &VtDevice) -> anyhow::Result<()> {
-    println!("Create descriptor set 0");
+    debug!("Create descriptor set 0");
 
-    let mut descriptor_set_manager = device.create_descriptor_set_manager(&[
+    #[derive(Copy, Clone, Eq, PartialEq, Hash)]
+    enum SetNames {
+        Main
+    }
+
+    let descriptor_set_manager = device.create_descriptor_set_manager(&[
         DescriptorSetDescription {
-            set: 0,
+            key: SetNames::Main,
             bindings: vec![
                 DescriptorSetBindingDescription {
                     binding: 0,
@@ -128,22 +133,17 @@ fn create_descriptor_set(device: &VtDevice) -> anyhow::Result<()> {
     values_buffer.upload()?;
     let values_buffer = values_buffer.into_dst();
 
-    descriptor_set_manager.write(&[
+    descriptor_set_manager.write_set(SetNames::Main, &[
         DescriptorSetBindingWriteDescription::Buffer {
-            set: 0,
             binding: 0,
-            ty: DescriptorType::STORAGE_BUFFER,
-            buffer: (&out_buffer).into()
+            buffer: out_buffer.raw_handle()
         },
         DescriptorSetBindingWriteDescription::Buffer {
-            set: 0,
             binding: 1,
-            ty: DescriptorType::UNIFORM_BUFFER,
-            buffer: (&values_buffer).into(),
+            buffer: values_buffer.raw_handle(),
         }
     ]);
 
-    println!("Everything went fine");
-
+    debug!("Everything went fine");
     Ok(())
 }
