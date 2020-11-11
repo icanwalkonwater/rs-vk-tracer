@@ -137,7 +137,7 @@ fn create_descriptor_set(device: &VtDevice) -> anyhow::Result<()> {
         },
         DescriptorSetBindingWriteDescription::Buffer {
             set: 0,
-            binding: 0,
+            binding: 1,
             ty: DescriptorType::UNIFORM_BUFFER,
             buffer: (&values_buffer).into(),
         }
