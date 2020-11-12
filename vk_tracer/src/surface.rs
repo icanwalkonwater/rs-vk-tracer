@@ -2,11 +2,12 @@ use ash::vk;
 use raw_window_handle::HasRawWindowHandle;
 
 use crate::{
-    adapter::{ColorSpace, Format, VtAdapter, VtAdapterRequirements},
+    adapter::{VtAdapter, VtAdapterRequirements},
     errors::Result,
     instance::VtInstance,
     utils::clamp,
 };
+use crate::images::{Format, ColorSpace};
 
 /// Choose the surface format.
 pub(crate) fn choose_surface_format(

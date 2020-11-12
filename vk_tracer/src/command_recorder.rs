@@ -1,6 +1,7 @@
 use ash::{version::DeviceV1_0, vk};
 use log::warn;
 
+use crate::images::{ImageLayout, VtImage};
 use crate::{
     allocation::DeviceSize,
     buffers::{VtBuffer, VtBufferMut},
@@ -9,6 +10,7 @@ use crate::{
     physical_device_selection::VtAdapterInfo,
 };
 use std::sync::{Mutex, MutexGuard};
+use crate::buffers::VtRawBufferHandle;
 
 const QUEUE_PRIORITIES_ONE: [f32; 1] = [1.0];
 
@@ -213,11 +215,32 @@ impl VtDevice {
     }
 }
 
+// `B` should be bounded but its a way too complicated bound so
+// we'll juste put it where we use it.
+pub struct CopyBufferDescription<B> {
+    buff: B,
+    row_length: u32,
+    image_height: u32,
+}
+
+pub struct CopyImageDescription<'a> {
+    img: &'a VtImage<'a>,
+    to_layout: ImageLayout,
+    mip_level: Option<u32>,
+    base_array_layer: Option<u32>,
+}
+
 pub trait VtTransferCommands<'ptr>: Sized {
     fn copy_buffer_to_buffer<'data: 'ptr, D: 'data>(
         &mut self,
         src: impl Into<VtBuffer<'ptr, 'data, D>>,
         dst: impl Into<VtBufferMut<'ptr, 'data, D>>,
+    ) -> Result<()>;
+
+    fn copy_buffer_to_image<'data: 'ptr, D: 'data, B: Into<VtBuffer<'ptr, 'data, D>>>(
+        &mut self,
+        src: CopyBufferDescription<B>,
+        dst: CopyImageDescription<'ptr>,
     ) -> Result<()>;
 }
 
@@ -254,6 +277,43 @@ impl<'ptr> VtTransferCommands<'ptr> for VtTransferRecorder<'ptr> {
             self.device
                 .handle
                 .cmd_copy_buffer(self.buffer, src.buffer, dst.buffer, &region);
+        }
+
+        Ok(())
+    }
+
+    fn copy_buffer_to_image<'data: 'ptr, D: 'data, B: Into<VtBuffer<'ptr, 'data, D>>>(
+        &mut self,
+        src: CopyBufferDescription<B>,
+        dst: CopyImageDescription<'ptr>,
+    ) -> Result<()> {
+        let buff = src.buff.into();
+        let buff = buff.as_ref();
+
+        unsafe {
+            let regions = [vk::BufferImageCopy::builder()
+                .buffer_offset(buff.info.get_offset() as DeviceSize)
+                .buffer_row_length(src.row_length)
+                .buffer_image_height(src.image_height)
+                .image_extent(dst.img.extent)
+                .image_offset(vk::Offset3D::default())
+                .image_subresource(
+                    vk::ImageSubresourceLayers::builder()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .mip_level(dst.mip_level.unwrap_or(1))
+                        .base_array_layer(dst.base_array_layer.unwrap_or(1))
+                        .layer_count(1)
+                        .build(),
+                )
+                .build()];
+
+            self.device.handle.cmd_copy_buffer_to_image(
+                self.buffer,
+                buff.buffer,
+                dst.img.image,
+                dst.to_layout,
+                &regions,
+            )
         }
 
         Ok(())

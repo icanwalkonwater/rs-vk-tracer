@@ -14,9 +14,7 @@ use crate::{
     physical_device_selection::{pick_physical_device, VtAdapterInfo},
     surface::VtSurface,
 };
-
-pub type Format = vk::Format;
-pub type ColorSpace = vk::ColorSpaceKHR;
+use crate::images::{Format, ColorSpace};
 
 pub struct VtAdapterRequirements {
     pub compatible_surface: Option<VtSurface>,

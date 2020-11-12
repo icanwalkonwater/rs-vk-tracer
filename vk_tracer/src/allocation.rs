@@ -2,6 +2,8 @@
 //! Extension of the [VtDevice] that allows the allocation of various buffers.
 //! These methods are abstractions on top of VMA.
 
+use crate::images::{Format, ImageLayout};
+use crate::images::{Extent2D, Extent3D, ImageUsage, SampleCount, Tiling};
 use crate::{
     buffers::{VtBufferAndStaging, VtBufferData, VtCpuBuffer, VtGpuBuffer},
     device::VtDevice,
@@ -11,6 +13,8 @@ use ash::vk;
 
 pub type DeviceSize = vk::DeviceSize;
 pub type BufferUsage = vk::BufferUsageFlags;
+
+// *** Buffers ***
 
 #[derive(Default)]
 pub struct BufferDescription {
@@ -79,5 +83,68 @@ impl VtDevice {
             info,
             _phantom: Default::default(),
         }))
+    }
+}
+
+// *** Images ***
+
+pub enum ImageDimension {
+    Dim1(u32),
+    Dim2(Extent2D),
+    Dim3(Extent3D),
+}
+
+pub struct ImageDescription {
+    size: ImageDimension,
+    format: Format,
+    mip_levels: Option<u32>,
+    array_layers: Option<u32>,
+    samples: SampleCount,
+    tiling: Tiling,
+    usage: ImageUsage,
+    layout: Option<ImageLayout>,
+}
+
+impl VtDevice {
+    pub fn create_image(&self, desc: &ImageDescription) -> Result<()> {
+        let (image_type, extent) = match desc.size {
+            ImageDimension::Dim1(width) => (
+                vk::ImageType::TYPE_1D,
+                Extent3D {
+                    width,
+                    height: 1,
+                    depth: 1,
+                },
+            ),
+            ImageDimension::Dim2(size) => (
+                vk::ImageType::TYPE_2D,
+                Extent3D {
+                    width: size.width,
+                    height: size.height,
+                    depth: 1,
+                },
+            ),
+            ImageDimension::Dim3(extent) => (vk::ImageType::TYPE_3D, extent),
+        };
+
+        let (image, allocation, info) = self.vma.create_image(
+            &vk::ImageCreateInfo::builder()
+                .image_type(image_type)
+                .extent(extent)
+                .format(desc.format)
+                .mip_levels(desc.mip_levels.unwrap_or(1))
+                .array_layers(desc.array_layers.unwrap_or(1))
+                .samples(desc.samples)
+                .tiling(desc.tiling)
+                .usage(desc.usage)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .initial_layout(desc.layout.unwrap_or(ImageLayout::GENERAL)),
+            &vk_mem::AllocationCreateInfo {
+                usage: vk_mem::MemoryUsage::GpuOnly,
+                ..Default::default()
+            },
+        )?;
+
+        Ok(())
     }
 }

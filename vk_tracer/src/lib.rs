@@ -4,6 +4,7 @@ mod utils;
 pub mod adapter;
 pub mod allocation;
 pub mod buffers;
+pub mod images;
 pub mod command_recorder;
 #[cfg(feature = "ext-debug")]
 mod debug_utils;
