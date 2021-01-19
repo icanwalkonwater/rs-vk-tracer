@@ -1,0 +1,17 @@
+[package]
+name = "vk_tracer"
+version = "0.1.0"
+authors = ["Lucas Malandrino <lucas.malandrino@gmail.com>"]
+edition = "2018"
+
+[features]
+ext-debug = []
+
+[dependencies]
+thiserror = "^1.0.21"
+log = "^0.4.11"
+
+raw-window-handle = "^0.3.3"
+ash = { version = "^0.31.0", git = "https://github.com/MaikKlein/ash" }
+ash-window = "^0.5.0"
+vk-mem = "^0.2.2"
