@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "vk_tracer",
+]
+
+[patch.crates-io]
+ash = { git = "https://github.com/MaikKlein/ash" }

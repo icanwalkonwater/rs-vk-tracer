@@ -1,0 +1,5 @@
+unstable_features = true
+edition = "2018"
+brace_style = "PreferSameLine"
+newline_style = "Unix"
+imports_granularity = "Crate"
