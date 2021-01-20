@@ -1,6 +1,6 @@
 use crate::errors::Result;
 use ash::{extensions::ext, vk};
-use log::{info, Level};
+use log::{info, log, Level};
 use std::{borrow::Cow, ffi::CStr};
 
 pub(crate) struct VtDebugUtils {

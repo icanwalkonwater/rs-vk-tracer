@@ -35,7 +35,7 @@ pub(crate) struct QueueFamilyInfo {
 
 #[derive(Debug)]
 pub(crate) struct AdapterInfo {
-    pub info: PhysicalDeviceInfo,
+    pub physical_device_info: PhysicalDeviceInfo,
     pub graphics_queue: QueueFamilyInfo,
     pub present_queue: QueueFamilyInfo,
     pub transfer_queue: QueueFamilyInfo,
@@ -116,11 +116,11 @@ pub(crate) fn pick_adapter(
     if let Some(res) = &best_device {
         info!(
             "Choosed physical device '{}'",
-            cstr_to_str(res.info.properties.device_name.as_ptr())
+            cstr_to_str(res.physical_device_info.properties.device_name.as_ptr())
         )
     }
 
-    best_device.ok_or(VtError::NoSuitableAdapter)
+    best_device.ok_or(VtError::NoSuitableAdapterError)
 }
 
 fn process_physical_device(
@@ -324,7 +324,7 @@ fn process_physical_device(
     debug!(" Additional score of {}", score);
 
     Some(AdapterInfo {
-        info,
+        physical_device_info: info,
         graphics_queue,
         present_queue,
         transfer_queue,

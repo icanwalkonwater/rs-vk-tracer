@@ -15,10 +15,11 @@ pub fn required_instance_extensions() -> Vec<*const c_char> {
 pub fn required_instance_extensions_with_surface(
     handle: &dyn HasRawWindowHandle,
 ) -> Result<Vec<*const c_char>> {
-    let mut extensions = Self::required_extensions();
+    let mut extensions = required_instance_extensions();
 
     extensions.extend(
-        ash_window::enumerate_required_extensions(handle)?
+        ash_window::enumerate_required_extensions(handle)
+            .expect("That's not supposed to happen, damn")
             .iter()
             .map(|ext| ext.as_ptr()),
     );

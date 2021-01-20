@@ -13,7 +13,7 @@ use crate::{
         required_device_extensions, required_instance_extensions,
         required_instance_extensions_with_surface,
     },
-    physical_device_selection::{pick_adapter, AdapterInfo},
+    physical_device_selection::{AdapterInfo},
     surface::Surface,
 };
 
@@ -61,7 +61,7 @@ pub struct Adapter {
 }
 
 impl Adapter {
-    pub fn new(
+    pub(crate) fn new(
         handle: vk::PhysicalDevice,
         info: AdapterInfo,
         requirements: AdapterRequirements,

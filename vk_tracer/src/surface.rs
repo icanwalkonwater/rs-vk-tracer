@@ -4,7 +4,6 @@ use raw_window_handle::HasRawWindowHandle;
 use crate::{
     adapter::{Adapter, AdapterRequirements},
     errors::Result,
-    instance::VtInstance,
     utils::clamp,
 };
 
@@ -56,14 +55,13 @@ pub struct Surface {
 
 impl Surface {
     pub fn create(
-        instance: &VtInstance,
+        entry: &ash::Entry,
+        instance: &ash::Instance,
         window: &impl HasRawWindowHandle,
         window_size: (u32, u32),
     ) -> Result<Self> {
-        let loader = ash::extensions::khr::Surface::new(&instance.entry, &instance.instance);
-        let handle = unsafe {
-            ash_window::create_surface(&instance.entry, &instance.instance, window, None)?
-        };
+        let loader = ash::extensions::khr::Surface::new(entry, instance);
+        let handle = unsafe { ash_window::create_surface(entry, instance, window, None)? };
 
         Ok(Self {
             loader,
@@ -77,11 +75,21 @@ impl Surface {
         })
     }
 
-    pub fn complete(&mut self, adapter: &VtAdapter) {
+    pub fn complete(&mut self, adapter: &Adapter) {
         let format = choose_surface_format(
-            &adapter.1.info.surface_formats.as_ref().unwrap(),
-            &adapter.1.info.surface_format_properties.as_ref().unwrap(),
-            &adapter.2,
+            &adapter
+                .info
+                .physical_device_info
+                .surface_formats
+                .as_ref()
+                .unwrap(),
+            &adapter
+                .info
+                .physical_device_info
+                .surface_format_properties
+                .as_ref()
+                .unwrap(),
+            &adapter.requirements,
         )
         .unwrap();
 
@@ -89,14 +97,14 @@ impl Surface {
         self.color_space = format.color_space;
 
         let min_extent = adapter
-            .1
             .info
+            .physical_device_info
             .surface_capabilities
             .unwrap()
             .min_image_extent;
         let max_extent = adapter
-            .1
             .info
+            .physical_device_info
             .surface_capabilities
             .unwrap()
             .max_image_extent;

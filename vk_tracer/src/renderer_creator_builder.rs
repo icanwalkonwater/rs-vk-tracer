@@ -1,7 +1,7 @@
 use crate::{
     adapter::{Adapter, AdapterRequirements},
     debug_utils::VtDebugUtils,
-    errors::Result,
+    errors::{RendererCreatorError, Result, VtError},
     extensions::{required_instance_extensions, required_instance_extensions_with_surface},
     physical_device_selection::pick_adapter,
     queue_indices::QueueFamilyIndices,
@@ -15,7 +15,7 @@ use ash::{
     vk,
 };
 use raw_window_handle::HasRawWindowHandle;
-use std::{borrow::Cow, ffi::CStr, os::raw::c_char};
+use std::{ffi::CStr, os::raw::c_char};
 
 #[derive(Debug)]
 pub enum PhysicalDeviceChoice {
@@ -49,6 +49,11 @@ impl RendererCreatorBuilder {
         }
     }
 
+    pub fn with_app_info(mut self, app_info: AppInfo) -> Self {
+        self.app_info = Some(app_info);
+        self
+    }
+
     pub fn with_instance(mut self, instance: ash::Instance) -> Self {
         self.instance = Some(instance);
         self
@@ -80,15 +85,22 @@ impl RendererCreatorBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Self> {
-        self.build_with_window(None, (0, 0))
-    }
-
     pub fn build_with_window(
         self,
         window: Option<&impl HasRawWindowHandle>,
         window_size: (u32, u32),
-    ) -> Result<Self> {
+    ) -> Result<RendererCreator> {
+        // Checks
+        if let None = self.app_info {
+            return Err(VtError::RendererCreatorError(
+                RendererCreatorError::MissingAppInfo,
+            ));
+        } else if self.adapter.is_some() ^ self.device.is_some() {
+            return Err(VtError::RendererCreatorError(
+                RendererCreatorError::AdapterDeviceRequired,
+            ));
+        }
+
         let entry = ash::Entry::new()?;
 
         // Create instance
@@ -98,9 +110,9 @@ impl RendererCreatorBuilder {
         } else {
             // Convert app info
             let vk_app_info = vk::ApplicationInfo::builder()
-                .application_name(str_to_cstr(app_info.name.as_str()))
+                .application_name(str_to_cstr(self.app_info.as_ref().unwrap().name))
                 .application_version({
-                    let (major, minor, patch) = app_info.version;
+                    let (major, minor, patch) = self.app_info.as_ref().unwrap().version;
                     vk::make_version(major, minor, patch)
                 })
                 .engine_name(str_to_cstr("VK Tracer"))
@@ -128,7 +140,7 @@ impl RendererCreatorBuilder {
         };
         // </editor-fold>
 
-        let debug_utils = if install_debug_utils {
+        let debug_utils = if self.install_debug_utils {
             Some(VtDebugUtils::new(&entry, &instance)?)
         } else {
             None
@@ -136,7 +148,7 @@ impl RendererCreatorBuilder {
 
         // Create surface
         let surface = if let Some(window) = window {
-            Some(Surface::create(insstance, window, window_size)?)
+            Some(Surface::create(&entry, &instance, window, window_size)?)
         } else {
             None
         };
@@ -171,39 +183,48 @@ impl RendererCreatorBuilder {
 
             // Query adapter
             let adapter_info = pick_adapter(&instance, &adapter_requirements)?;
-            let adapter =
-                Adapter::new(adapter_info.info.handle, adapter_info, adapter_requirements);
+            let adapter = Adapter::new(
+                adapter_info.physical_device_info.handle,
+                adapter_info,
+                adapter_requirements,
+            );
 
             // Create device
             let device = {
-                let enable_extensions = {
-                    // Add required extensions
-                    let mut extensions = adapter_requirements
-                        .required_extensions
-                        .iter()
-                        .map(|ext| ext.as_ptr())
-                        .collect::<Vec<_>>();
-
-                    // Add optional extensions that are present in the info
-                    unsafe {
-                        adapter_requirements
-                            .optional_extensions
+                let enable_extensions =
+                    {
+                        // Add required extensions
+                        let mut extensions = adapter
+                            .requirements
+                            .required_extensions
                             .iter()
-                            .filter(|&&ext| {
-                                adapter.info.extensions.iter().any(|other| {
-                                    CStr::from_ptr(other.extension_name.as_ptr()) == ext
-                                })
-                            })
-                            .for_each(|ext| {
-                                extensions.push(ext.as_ptr());
-                            })
-                    }
+                            .map(|ext| ext.as_ptr())
+                            .collect::<Vec<_>>();
 
-                    extensions
-                };
+                        // Add optional extensions that are present in the info
+                        unsafe {
+                            adapter
+                                .requirements
+                                .optional_extensions
+                                .iter()
+                                .filter(|&&ext| {
+                                    adapter.info.physical_device_info.extensions.iter().any(
+                                        |other| {
+                                            CStr::from_ptr(other.extension_name.as_ptr()) == ext
+                                        },
+                                    )
+                                })
+                                .for_each(|ext| {
+                                    extensions.push(ext.as_ptr());
+                                })
+                        }
+
+                        extensions
+                    };
 
                 // Build validation layers
-                let enable_layers = adapter_requirements
+                let enable_layers = adapter
+                    .requirements
                     .validation_layers
                     .iter()
                     .map(|layer| layer.as_ptr() as *const c_char)
@@ -211,11 +232,11 @@ impl RendererCreatorBuilder {
 
                 // Queues create info
                 let queues_create_info =
-                    QueueFamilyIndices::from(&adapter_info).into_queue_create_info();
+                    QueueFamilyIndices::from(&adapter.info).into_queue_create_info();
 
                 unsafe {
                     instance.create_device(
-                        adapter.info.handle,
+                        adapter.handle,
                         &vk::DeviceCreateInfo::builder()
                             .enabled_extension_names(&enable_extensions)
                             .enabled_layer_names(&enable_layers)
@@ -223,13 +244,20 @@ impl RendererCreatorBuilder {
                         None,
                     )?
                 }
-
-                // TODO command pool
-                // TODO allocator
             };
+
+            // TODO command pool
+            // TODO allocator
+
+            (adapter, device)
         };
         // </editor-fold>
 
-        Ok(())
+        Ok(RendererCreator {
+            instance,
+            adapter,
+            device,
+            debug_utils,
+        })
     }
 }
