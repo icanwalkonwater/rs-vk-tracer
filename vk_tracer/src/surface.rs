@@ -2,7 +2,7 @@ use ash::vk;
 use raw_window_handle::HasRawWindowHandle;
 
 use crate::{
-    adapter::{Adapter, VtAdapterRequirements},
+    adapter::{Adapter, AdapterRequirements},
     errors::Result,
     instance::VtInstance,
     utils::clamp,
@@ -12,7 +12,7 @@ use crate::{
 pub(crate) fn choose_surface_format(
     formats: &[vk::SurfaceFormatKHR],
     format_properties: &[vk::FormatProperties],
-    requirements: &VtAdapterRequirements,
+    requirements: &AdapterRequirements,
 ) -> Option<vk::SurfaceFormatKHR> {
     formats
         .iter()
@@ -20,8 +20,8 @@ pub(crate) fn choose_surface_format(
         .find(|(format, _)| {
             requirements.surface_formats.contains(&format.format)
                 && requirements
-                .surface_color_spaces
-                .contains(&format.color_space)
+                    .surface_color_spaces
+                    .contains(&format.color_space)
             // TODO: Reenable for ray tracing
             // && properties
             //     .optimal_tiling_features
@@ -34,7 +34,7 @@ pub(crate) fn choose_surface_format(
 /// Choose the present mode, will fallback to FIFO if the requirements can't be met.
 pub(crate) fn choose_surface_present_mode(
     present_modes: &[vk::PresentModeKHR],
-    requirements: &VtAdapterRequirements,
+    requirements: &AdapterRequirements,
 ) -> vk::PresentModeKHR {
     for mode in present_modes {
         if requirements.present_modes.contains(mode) {
@@ -83,7 +83,7 @@ impl Surface {
             &adapter.1.info.surface_format_properties.as_ref().unwrap(),
             &adapter.2,
         )
-            .unwrap();
+        .unwrap();
 
         self.format = format.format;
         self.color_space = format.color_space;

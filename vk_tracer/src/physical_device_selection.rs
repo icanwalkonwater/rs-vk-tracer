@@ -3,7 +3,7 @@ use std::{
     ffi::CStr,
 };
 
-use crate::{adapter::VtAdapterRequirements, errors::Result};
+use crate::{adapter::AdapterRequirements, errors::Result};
 use ash::{version::InstanceV1_0, vk};
 use log::{debug, error, info};
 
@@ -42,9 +42,9 @@ pub(crate) struct AdapterInfo {
     pub score: u32,
 }
 
-pub(crate) fn pick_physical_device(
+pub(crate) fn pick_adapter(
     instance: &ash::Instance,
-    requirements: &VtAdapterRequirements,
+    requirements: &AdapterRequirements,
 ) -> Result<AdapterInfo> {
     let physical_devices = unsafe { instance.enumerate_physical_devices()? };
 
@@ -125,7 +125,7 @@ pub(crate) fn pick_physical_device(
 
 fn process_physical_device(
     info: PhysicalDeviceInfo,
-    requirements: &VtAdapterRequirements,
+    requirements: &AdapterRequirements,
 ) -> Option<AdapterInfo> {
     info!(
         "Processing physical device {:?}",
@@ -180,7 +180,7 @@ fn process_physical_device(
     debug!(" Checking swapchain formats...");
 
     if let (Some(surface_formats), Some(surface_format_properties)) =
-    (&info.surface_formats, &info.surface_format_properties)
+        (&info.surface_formats, &info.surface_format_properties)
     {
         debug!("  Available formats:");
         for format in surface_formats.iter() {
@@ -191,7 +191,7 @@ fn process_physical_device(
         }
 
         if let Some(format) =
-        choose_surface_format(&surface_formats, &surface_format_properties, requirements)
+            choose_surface_format(&surface_formats, &surface_format_properties, requirements)
         {
             debug!(" - Format {:?} [OK]", format.format);
             debug!(" - Color space {:?} [OK]", format.color_space);

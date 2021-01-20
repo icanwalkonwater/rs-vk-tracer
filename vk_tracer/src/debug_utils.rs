@@ -1,9 +1,7 @@
-use ash::extensions::ext;
-use ash::vk;
 use crate::errors::Result;
+use ash::{extensions::ext, vk};
 use log::{info, Level};
-use std::borrow::Cow;
-use std::ffi::CStr;
+use std::{borrow::Cow, ffi::CStr};
 
 pub(crate) struct VtDebugUtils {
     pub(crate) loader: ext::DebugUtils,
@@ -25,9 +23,7 @@ impl VtDebugUtils {
 
         info!("Debug utils setup !");
 
-        Ok(Self {
-            loader, messenger
-        })
+        Ok(Self { loader, messenger })
     }
 }
 

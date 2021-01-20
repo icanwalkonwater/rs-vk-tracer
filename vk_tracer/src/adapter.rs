@@ -8,14 +8,16 @@ use ash::vk;
 use raw_window_handle::HasRawWindowHandle;
 
 use crate::{
-    device::VtDevice,
     errors::Result,
-    instance::VtInstance,
-    physical_device_selection::{pick_physical_device, AdapterInfo},
+    extensions::{
+        required_device_extensions, required_instance_extensions,
+        required_instance_extensions_with_surface,
+    },
+    physical_device_selection::{pick_adapter, AdapterInfo},
     surface::Surface,
 };
 
-pub struct VtAdapterRequirements {
+pub struct AdapterRequirements {
     pub compatible_surface: Option<Surface>,
     pub instance_extensions: Vec<*const c_char>,
     pub required_extensions: Vec<&'static CStr>,
@@ -26,28 +28,25 @@ pub struct VtAdapterRequirements {
     pub validation_layers: Vec<&'static str>,
 }
 
-impl VtAdapterRequirements {
-    pub fn default_from_window(
-        surface: Surface,
-        window: &impl HasRawWindowHandle,
-    ) -> Result<Self> {
+impl AdapterRequirements {
+    pub fn default_from_window(surface: Surface, window: &impl HasRawWindowHandle) -> Result<Self> {
         Ok(Self {
             compatible_surface: Some(surface),
-            instance_extensions: VtInstance::required_extensions_with_surface(window)?,
+            instance_extensions: required_instance_extensions_with_surface(window)?,
             ..Default::default()
         })
     }
 }
 
-impl Default for VtAdapterRequirements {
+impl Default for AdapterRequirements {
     fn default() -> Self {
         Self {
             compatible_surface: None,
-            instance_extensions: VtInstance::required_extensions(),
-            required_extensions: VtDevice::required_extensions(),
+            instance_extensions: required_instance_extensions(),
+            required_extensions: required_device_extensions(),
             optional_extensions: Vec::new(),
-            surface_formats: vec![Format::R8G8B8A8_SRGB, Format::B8G8R8A8_SRGB],
-            surface_color_spaces: vec![ColorSpace::SRGB_NONLINEAR],
+            surface_formats: vec![vk::Format::R8G8B8A8_SRGB, vk::Format::B8G8R8A8_SRGB],
+            surface_color_spaces: vec![vk::ColorSpaceKHR::SRGB_NONLINEAR],
             present_modes: vec![vk::PresentModeKHR::MAILBOX],
             validation_layers: Vec::new(),
         }
@@ -55,8 +54,22 @@ impl Default for VtAdapterRequirements {
 }
 
 /// A handle to a physical device
-pub struct Adapter(
-    pub vk::PhysicalDevice,
-    pub(crate) AdapterInfo,
-    pub(crate) VtAdapterRequirements,
-);
+pub struct Adapter {
+    pub handle: vk::PhysicalDevice,
+    pub(crate) info: AdapterInfo,
+    pub(crate) requirements: AdapterRequirements,
+}
+
+impl Adapter {
+    pub fn new(
+        handle: vk::PhysicalDevice,
+        info: AdapterInfo,
+        requirements: AdapterRequirements,
+    ) -> Self {
+        Self {
+            handle,
+            info,
+            requirements,
+        }
+    }
+}

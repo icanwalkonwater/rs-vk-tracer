@@ -1,6 +1,6 @@
-use raw_window_handle::HasRawWindowHandle;
-use std::os::raw::c_char;
 use crate::errors::Result;
+use raw_window_handle::HasRawWindowHandle;
+use std::{ffi::CStr, os::raw::c_char};
 
 /// Get extensions required for the instance.
 pub fn required_instance_extensions() -> Vec<*const c_char> {
@@ -24,4 +24,8 @@ pub fn required_instance_extensions_with_surface(
     );
 
     Ok(extensions)
+}
+
+pub fn required_device_extensions() -> Vec<&'static CStr> {
+    vec![ash::extensions::khr::Swapchain::name()]
 }
