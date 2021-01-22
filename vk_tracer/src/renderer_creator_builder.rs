@@ -16,6 +16,7 @@ use ash::{
 };
 use raw_window_handle::HasRawWindowHandle;
 use std::{ffi::CStr, os::raw::c_char};
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum PhysicalDeviceChoice {
@@ -89,7 +90,7 @@ impl RendererCreatorBuilder {
         self,
         window: Option<&impl HasRawWindowHandle>,
         window_size: (u32, u32),
-    ) -> Result<RendererCreator> {
+    ) -> Result<Arc<RendererCreator>> {
         // Checks
         if let None = self.app_info {
             return Err(VtError::RendererCreatorError(
@@ -253,11 +254,20 @@ impl RendererCreatorBuilder {
         };
         // </editor-fold>
 
-        Ok(RendererCreator {
+        // Allocator
+        let vma = vk_mem::Allocator::new(&vk_mem::AllocatorCreateInfo {
+            instance: instance.clone(),
+            device: device.clone(),
+            physical_device: adapter.handle,
+            ..Default::default()
+        })?;
+
+        Ok(Arc::new(RendererCreator {
             instance,
             adapter,
             device,
             debug_utils,
-        })
+            vma: Arc::new(vma),
+        }))
     }
 }

@@ -9,6 +9,9 @@ pub mod renderer_creator_builder;
 mod renderers;
 mod surface;
 mod utils;
+mod allocator;
+mod mesh;
+mod buffers;
 
 pub const VULKAN_VERSION: u32 = ash::vk::make_version(1, 2, 0);
 pub const VULKAN_VERSION_STR: &str = "1.2.0";
@@ -32,6 +35,8 @@ pub mod errors {
         LoadingError(#[from] ash::LoadingError),
         #[error("Instance error")]
         InstanceError(#[from] ash::InstanceError),
+        #[error("VMA Error")]
+        VmaError(#[from] vk_mem::Error),
         #[error("Renderer creator error")]
         RendererCreatorError(#[from] RendererCreatorError),
         #[error("No suitable adaptor error")]
