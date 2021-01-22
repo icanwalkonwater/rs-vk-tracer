@@ -1,7 +1,6 @@
-use ash::vk;
-use std::sync::Arc;
-use crate::renderer_creator::RendererCreator;
-use crate::errors::Result;
+use crate::{command_recorder::QueueType, errors::Result, renderer_creator::RendererCreator};
+use ash::{version::DeviceV1_0, vk};
+use std::{alloc::dealloc, sync::Arc};
 
 pub struct BufferDescription {
     pub size: vk::DeviceSize,
@@ -18,27 +17,36 @@ pub struct RawBufferAllocation {
 
 impl RawBufferAllocation {
     pub(crate) fn new_vertex_buffer(vma: &Arc<vk_mem::Allocator>, size: usize) -> Result<Self> {
-        Self::new(vma, &BufferDescription {
-            size: size as vk::DeviceSize,
-            usage: vk::BufferUsageFlags::VERTEX_BUFFER,
-            location: vk_mem::MemoryUsage::GpuOnly,
-        })
+        Self::new(
+            vma,
+            &BufferDescription {
+                size: size as vk::DeviceSize,
+                usage: vk::BufferUsageFlags::VERTEX_BUFFER,
+                location: vk_mem::MemoryUsage::GpuOnly,
+            },
+        )
     }
 
     pub(crate) fn new_index_buffer(vma: &Arc<vk_mem::Allocator>, size: usize) -> Result<Self> {
-        Self::new(vma, &BufferDescription {
-            size: size as vk::DeviceSize,
-            usage: vk::BufferUsageFlags::INDEX_BUFFER,
-            location: vk_mem::MemoryUsage::GpuOnly,
-        })
+        Self::new(
+            vma,
+            &BufferDescription {
+                size: size as vk::DeviceSize,
+                usage: vk::BufferUsageFlags::INDEX_BUFFER,
+                location: vk_mem::MemoryUsage::GpuOnly,
+            },
+        )
     }
 
     pub(crate) fn new_staging_buffer(vma: &Arc<vk_mem::Allocator>, size: usize) -> Result<Self> {
-        Self::new(vma, &BufferDescription {
-            size: size as vk::DeviceSize,
-            usage: vk::BufferUsageFlags::TRANSFER_SRC,
-            location: vk_mem::MemoryUsage::CpuOnly,
-        })
+        Self::new(
+            vma,
+            &BufferDescription {
+                size: size as vk::DeviceSize,
+                usage: vk::BufferUsageFlags::TRANSFER_SRC,
+                location: vk_mem::MemoryUsage::CpuOnly,
+            },
+        )
     }
 
     pub(crate) fn new(vma: &Arc<vk_mem::Allocator>, desc: &BufferDescription) -> Result<Self> {
@@ -74,8 +82,7 @@ impl RawBufferAllocation {
     /// # Safety
     /// Will fail if the buffer isn't HOST_VISIBLE
     pub unsafe fn store<D: Copy>(&mut self, data: &[D]) -> Result<()> {
-        use std::mem;
-        use std::ffi;
+        use std::{ffi, mem};
 
         let (need_to_unmap, mapped_ptr) = self.ensure_mapped()?;
 
@@ -83,13 +90,14 @@ impl RawBufferAllocation {
         let mut mapped_slice = ash::util::Align::new(
             mapped_ptr as *mut ffi::c_void,
             mem::align_of::<D>() as vk::DeviceSize,
-            size
+            size,
         );
 
         mapped_slice.copy_from_slice(data);
 
         // Will be ignored if HOST_COHERENT
-        self.vma.flush_allocation(&self.allocation, 0, size as usize)?;
+        self.vma
+            .flush_allocation(&self.allocation, 0, size as usize)?;
 
         if need_to_unmap {
             self.vma.unmap_memory(&self.allocation)?;
@@ -98,14 +106,54 @@ impl RawBufferAllocation {
         Ok(())
     }
 
-    pub unsafe fn copy_to(&self, _creator: &RendererCreator, other: &mut RawBufferAllocation) -> Result<()> {
+    pub unsafe fn copy_to(
+        &self,
+        creator: &RendererCreator,
+        other: &mut RawBufferAllocation,
+    ) -> Result<()> {
         assert!(self.info.get_size() <= other.info.get_size());
-        todo!("Copy stuff")
+
+        let pool = creator
+            .command_pools
+            .get(&QueueType::Transfer)
+            .unwrap()
+            .lock()
+            .expect("Poisoned");
+
+        let buffer = creator.device.allocate_command_buffers(
+            &vk::CommandBufferAllocateInfo::builder()
+                .command_pool(*pool)
+                .command_buffer_count(1)
+                .level(vk::CommandBufferLevel::PRIMARY),
+        )?[0];
+
+        creator.device.begin_command_buffer(
+            buffer,
+            &vk::CommandBufferBeginInfo::builder()
+                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+        )?;
+
+        {
+            let copy = vk::BufferCopy::builder()
+                .size(self.info.get_size() as vk::DeviceSize)
+                .src_offset(self.info.get_offset() as vk::DeviceSize)
+                .dst_offset(other.info.get_offset() as vk::DeviceSize);
+
+            creator
+                .device
+                .cmd_copy_buffer(buffer, self.buffer, other.buffer, &[copy.build()])
+        }
+
+        creator.device.end_command_buffer(buffer)?;
+
+        Ok(())
     }
 }
 
 impl Drop for RawBufferAllocation {
     fn drop(&mut self) {
-        self.vma.destroy_buffer(self.buffer, &self.allocation).expect("Failed to free VMA buffer");
+        self.vma
+            .destroy_buffer(self.buffer, &self.allocation)
+            .expect("Failed to free VMA buffer");
     }
 }

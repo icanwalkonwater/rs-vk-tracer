@@ -13,7 +13,7 @@ use crate::{
         required_device_extensions, required_instance_extensions,
         required_instance_extensions_with_surface,
     },
-    physical_device_selection::{AdapterInfo},
+    physical_device_selection::AdapterInfo,
     surface::Surface,
 };
 
@@ -32,7 +32,7 @@ impl AdapterRequirements {
     pub fn default_from_window(surface: Surface, window: &impl HasRawWindowHandle) -> Result<Self> {
         Ok(Self {
             compatible_surface: Some(surface),
-            instance_extensions: required_instance_extensions_with_surface(window)?,
+            instance_extensions: required_instance_extensions_with_surface(false, window)?,
             ..Default::default()
         })
     }
@@ -42,7 +42,7 @@ impl Default for AdapterRequirements {
     fn default() -> Self {
         Self {
             compatible_surface: None,
-            instance_extensions: required_instance_extensions(),
+            instance_extensions: required_instance_extensions(false),
             required_extensions: required_device_extensions(),
             optional_extensions: Vec::new(),
             surface_formats: vec![vk::Format::R8G8B8A8_SRGB, vk::Format::B8G8R8A8_SRGB],

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, ffi::CStr};
+use std::{borrow::Cow, ffi::CStr, ops::Deref};
 
 /// Converts a rust string to a CStr in a kinda safe manner.
 /// Can produce strange thing if the input string isn't valid ASCII.

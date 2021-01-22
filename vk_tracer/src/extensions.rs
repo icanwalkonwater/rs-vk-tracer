@@ -3,8 +3,8 @@ use raw_window_handle::HasRawWindowHandle;
 use std::{ffi::CStr, os::raw::c_char};
 
 /// Get extensions required for the instance.
-pub fn required_instance_extensions() -> Vec<*const c_char> {
-    if cfg!(feature = "ext-debug") {
+pub fn required_instance_extensions(with_debug_utils: bool) -> Vec<*const c_char> {
+    if with_debug_utils {
         vec![ash::extensions::ext::DebugUtils::name().as_ptr()]
     } else {
         vec![]
@@ -13,9 +13,10 @@ pub fn required_instance_extensions() -> Vec<*const c_char> {
 
 /// Get extensions required for the instance and to present to the given surface.
 pub fn required_instance_extensions_with_surface(
+    with_debug_utils: bool,
     handle: &dyn HasRawWindowHandle,
 ) -> Result<Vec<*const c_char>> {
-    let mut extensions = required_instance_extensions();
+    let mut extensions = required_instance_extensions(with_debug_utils);
 
     extensions.extend(
         ash_window::enumerate_required_extensions(handle)

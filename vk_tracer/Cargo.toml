@@ -9,6 +9,8 @@ edition = "2018"
 [dependencies]
 thiserror = "^1.0.21"
 log = "^0.4.11"
+lazy_static = "1.4.0"
+field-offset = "0.3.2"
 
 raw-window-handle = "^0.3.3"
 ash = "^0.31.0"

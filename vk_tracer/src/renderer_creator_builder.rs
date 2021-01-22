@@ -1,5 +1,6 @@
 use crate::{
     adapter::{Adapter, AdapterRequirements},
+    command_recorder::QueueType,
     debug_utils::VtDebugUtils,
     errors::{RendererCreatorError, Result, VtError},
     extensions::{required_instance_extensions, required_instance_extensions_with_surface},
@@ -11,12 +12,17 @@ use crate::{
     AppInfo, VULKAN_VERSION,
 };
 use ash::{
-    version::{EntryV1_0, InstanceV1_0},
+    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk,
 };
+use log::debug;
 use raw_window_handle::HasRawWindowHandle;
-use std::{ffi::CStr, os::raw::c_char};
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    ffi::CStr,
+    os::raw::c_char,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Debug)]
 pub enum PhysicalDeviceChoice {
@@ -127,9 +133,9 @@ impl RendererCreatorBuilder {
 
             // Gather extensions, window is optional
             let extensions = if let Some(window) = window {
-                required_instance_extensions_with_surface(window)?
+                required_instance_extensions_with_surface(self.install_debug_utils, window)?
             } else {
-                required_instance_extensions()
+                required_instance_extensions(self.install_debug_utils)
             };
 
             // Create instance
@@ -247,20 +253,45 @@ impl RendererCreatorBuilder {
                 }
             };
 
-            // TODO command pool
-            // TODO allocator
-
             (adapter, device)
         };
         // </editor-fold>
 
         // Allocator
         let vma = vk_mem::Allocator::new(&vk_mem::AllocatorCreateInfo {
-            instance: instance.clone(),
-            device: device.clone(),
             physical_device: adapter.handle,
-            ..Default::default()
+            device: device.clone(),
+            instance: instance.clone(),
+            flags: vk_mem::AllocatorCreateFlags::NONE,
+            preferred_large_heap_block_size: 0,
+            frame_in_use_count: 0,
+            heap_size_limits: None,
         })?;
+
+        // Command pool
+        let command_pools = unsafe {
+            [
+                (QueueType::Graphics, &adapter.info.graphics_queue),
+                (QueueType::Transfer, &adapter.info.transfer_queue),
+                (QueueType::Present, &adapter.info.present_queue),
+            ]
+            .iter()
+            .map(|(ty, queue)| unsafe {
+                let pool = device.create_command_pool(
+                    &vk::CommandPoolCreateInfo::builder().queue_family_index(queue.index),
+                    None,
+                );
+
+                if let Ok(pool) = pool {
+                    Ok((*ty, Arc::new(Mutex::new(pool))))
+                } else {
+                    Err(pool.unwrap_err())
+                }
+            })
+            .collect::<std::result::Result<Vec<_>, _>>()?
+            .into_iter()
+            .collect()
+        };
 
         Ok(Arc::new(RendererCreator {
             instance,
@@ -268,6 +299,7 @@ impl RendererCreatorBuilder {
             device,
             debug_utils,
             vma: Arc::new(vma),
+            command_pools,
         }))
     }
 }
