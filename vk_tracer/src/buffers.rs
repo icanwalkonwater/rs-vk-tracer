@@ -1,5 +1,8 @@
 use crate::{allocator::RawBufferAllocation, errors::Result, renderer_creator::RendererCreator};
-use std::sync::Arc;
+use std::{
+    ops::DerefMut,
+    sync::{Arc, Mutex},
+};
 
 pub struct TypedBuffer<D: Copy>(RawBufferAllocation, std::marker::PhantomData<D>);
 
@@ -10,7 +13,10 @@ impl<D: Copy> TypedBuffer<D> {
         Self(raw, std::marker::PhantomData)
     }
 
-    pub(crate) fn new_vertex_buffer(vma: &Arc<vk_mem::Allocator>, size: usize) -> Result<Self> {
+    pub(crate) fn new_vertex_buffer(
+        vma: &Arc<Mutex<vk_mem::Allocator>>,
+        size: usize,
+    ) -> Result<Self> {
         unsafe {
             Ok(TypedBuffer::from_raw(
                 RawBufferAllocation::new_vertex_buffer(vma, size * std::mem::size_of::<D>())?,
@@ -18,7 +24,10 @@ impl<D: Copy> TypedBuffer<D> {
         }
     }
 
-    pub(crate) fn new_index_buffer(vma: &Arc<vk_mem::Allocator>, size: usize) -> Result<Self> {
+    pub(crate) fn new_index_buffer(
+        vma: &Arc<Mutex<vk_mem::Allocator>>,
+        size: usize,
+    ) -> Result<Self> {
         unsafe {
             Ok(TypedBuffer::from_raw(
                 RawBufferAllocation::new_index_buffer(vma, size * std::mem::size_of::<D>())?,

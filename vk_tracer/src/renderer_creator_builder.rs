@@ -20,6 +20,7 @@ use raw_window_handle::HasRawWindowHandle;
 use std::{
     collections::HashMap,
     ffi::CStr,
+    mem::ManuallyDrop,
     os::raw::c_char,
     sync::{Arc, Mutex},
 };
@@ -276,14 +277,25 @@ impl RendererCreatorBuilder {
                 (QueueType::Present, &adapter.info.present_queue),
             ]
             .iter()
-            .map(|(ty, queue)| unsafe {
+            .map(|(ty, queue_info)| unsafe {
+                let queue = device.get_device_queue(queue_info.index, 0);
+
+                let pool_flags = if let QueueType::Transfer = ty {
+                    vk::CommandPoolCreateFlags::TRANSIENT
+                } else {
+                    vk::CommandPoolCreateFlags::empty()
+                };
+
+                // Stop creating useless pools
                 let pool = device.create_command_pool(
-                    &vk::CommandPoolCreateInfo::builder().queue_family_index(queue.index),
+                    &vk::CommandPoolCreateInfo::builder()
+                        .flags(pool_flags)
+                        .queue_family_index(queue_info.index),
                     None,
                 );
 
                 if let Ok(pool) = pool {
-                    Ok((*ty, Arc::new(Mutex::new(pool))))
+                    Ok((*ty, Arc::new(Mutex::new((queue, pool)))))
                 } else {
                     Err(pool.unwrap_err())
                 }
@@ -296,9 +308,10 @@ impl RendererCreatorBuilder {
         Ok(Arc::new(RendererCreator {
             instance,
             adapter,
+            window_size: (window_size.0 as f32, window_size.1 as f32),
             device,
-            debug_utils,
-            vma: Arc::new(vma),
+            debug_utils: ManuallyDrop::new(debug_utils),
+            vma: Arc::new(Mutex::new(vma)),
             command_pools,
         }))
     }

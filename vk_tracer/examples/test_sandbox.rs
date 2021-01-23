@@ -11,6 +11,7 @@ fn main() -> anyhow::Result<()> {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_title("Test Sandbox")
+        .with_resizable(false)
         .build(&event_loop)?;
 
     let renderer_creator = RendererCreator::builder()
@@ -21,7 +22,8 @@ fn main() -> anyhow::Result<()> {
         })
         .with_debug_utils(true)
         .with_validation_layer("VK_LAYER_KHRONOS_validation")
-        .with_hardware_raytracing()
+        .with_validation_layer("VK_LAYER_LUNARG_api_dump")
+        //.with_hardware_raytracing()
         .build_with_window(Some(&window), window.inner_size().into())?;
 
     let mesh = renderer_creator.create_mesh(

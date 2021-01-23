@@ -4,10 +4,12 @@ use crate::{
     errors::Result,
     renderer_creator::RendererCreator,
 };
-use ash::vk;
-use lazy_static::lazy_static;
+use ash::{
+    vk,
+    vk::{VertexInputAttributeDescription, VertexInputBindingDescription},
+};
 use field_offset::offset_of;
-use ash::vk::{VertexInputBindingDescription, VertexInputAttributeDescription};
+use lazy_static::lazy_static;
 
 pub trait Vertex: Copy {
     fn binding_desc() -> &'static [vk::VertexInputBindingDescription];
@@ -22,29 +24,27 @@ pub struct VertexPosUv {
 }
 
 lazy_static! {
-        static ref VERTEX_POS_UV_BINDING_DESC: [vk::VertexInputBindingDescription; 1] = [
-            vk::VertexInputBindingDescription::builder()
-                .binding(0)
-                .stride(std::mem::size_of::<VertexPosUv>())
-                .input_rate(vk::VertexInputRate::VERTEX)
-                .build(),
-        ];
-
-        static ref VERTEX_POS_UV_ATTR_DESC: [vk::VertexInputAttributeDescription; 2] = [
-            vk::VertexInputAttributeDescription::builder()
-                .binding(0)
-                .location(0)
-                .format(vk::Format::R32G32B32_SFLOAT)
-                .offset(offset_of!(VertexPosUv => pos).get_byte_offset())
-                .build(),
-            vk::VertexInputAttributeDescription::builder()
-                .binding(0)
-                .location(1)
-                .format(vk::Format::R32G32_SFLOAT)
-                .offset(offset_of!(VertexPosUv => uv).get_byte_offset())
-                .build(),
-        ];
-    }
+    static ref VERTEX_POS_UV_BINDING_DESC: [vk::VertexInputBindingDescription; 1] =
+        [vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(std::mem::size_of::<VertexPosUv>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build(),];
+    static ref VERTEX_POS_UV_ATTR_DESC: [vk::VertexInputAttributeDescription; 2] = [
+        vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(0)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset(offset_of!(VertexPosUv => pos).get_byte_offset() as u32)
+            .build(),
+        vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(1)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset(offset_of!(VertexPosUv => uv).get_byte_offset() as u32)
+            .build(),
+    ];
+}
 
 impl Vertex for VertexPosUv {
     fn binding_desc() -> &'static [VertexInputBindingDescription] {
@@ -73,6 +73,7 @@ impl<V: Vertex, I: Index> Mesh<V, I> {
                 TypedBuffer::new_vertex_buffer(&creator.vma, vertices.len())?,
             )?;
             staging.store(vertices)?;
+            dbg!("Upload to staging");
             staging.commit()?
         };
 
