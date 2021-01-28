@@ -12,6 +12,7 @@ pub mod renderer_creator;
 pub mod renderer_creator_builder;
 mod renderers;
 mod surface;
+mod swapchain;
 mod utils;
 
 pub const VULKAN_VERSION: u32 = ash::vk::make_version(1, 2, 0);

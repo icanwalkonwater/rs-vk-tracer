@@ -1,3 +1,6 @@
 /target
 /*/target
 /.idea
+/tools/*.png
+/vma_stats.json
+/vulkan_api_dump.html

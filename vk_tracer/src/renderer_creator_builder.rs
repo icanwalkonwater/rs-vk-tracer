@@ -15,7 +15,6 @@ use ash::{
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk,
 };
-use log::debug;
 use raw_window_handle::HasRawWindowHandle;
 use std::{
     collections::HashMap,
@@ -24,6 +23,7 @@ use std::{
     os::raw::c_char,
     sync::{Arc, Mutex},
 };
+use crate::swapchain::Swapchain;
 
 #[derive(Debug)]
 pub enum PhysicalDeviceChoice {
@@ -169,7 +169,7 @@ impl RendererCreatorBuilder {
             // Build adapter requirements
             let adapter_requirements = {
                 let mut requirements = if let Some(window) = window {
-                    AdapterRequirements::default_from_window(surface.unwrap(), window)?
+                    AdapterRequirements::default_from_window(surface.as_ref().unwrap(), window)?
                 } else {
                     AdapterRequirements::default()
                 };
@@ -258,6 +258,14 @@ impl RendererCreatorBuilder {
         };
         // </editor-fold>
 
+        // Swapchain
+        let swapchain = if let Some(mut surface) = surface {
+            surface.complete(&adapter);
+            Some(Swapchain::new(&instance, surface, &adapter, &device, window_size)?)
+        } else {
+            None
+        };
+
         // Allocator
         let vma = vk_mem::Allocator::new(&vk_mem::AllocatorCreateInfo {
             physical_device: adapter.handle,
@@ -269,46 +277,50 @@ impl RendererCreatorBuilder {
             heap_size_limits: None,
         })?;
 
-        // Command pool
-        let command_pools = unsafe {
-            [
-                (QueueType::Graphics, &adapter.info.graphics_queue),
-                (QueueType::Transfer, &adapter.info.transfer_queue),
-                (QueueType::Present, &adapter.info.present_queue),
-            ]
-            .iter()
-            .map(|(ty, queue_info)| unsafe {
-                let queue = device.get_device_queue(queue_info.index, 0);
-
-                let pool_flags = if let QueueType::Transfer = ty {
-                    vk::CommandPoolCreateFlags::TRANSIENT
-                } else {
-                    vk::CommandPoolCreateFlags::empty()
-                };
-
-                // Stop creating useless pools
+        // Command pools
+        let command_pools = {
+            // Pool creation macro
+            let pool_creator = |queue_index: u32, flags: vk::CommandPoolCreateFlags| unsafe {
+                let queue = device.get_device_queue(queue_index, 0);
                 let pool = device.create_command_pool(
                     &vk::CommandPoolCreateInfo::builder()
-                        .flags(pool_flags)
-                        .queue_family_index(queue_info.index),
+                        .flags(flags)
+                        .queue_family_index(queue_index),
                     None,
-                );
+                )?;
+                Result::Ok(Arc::new(Mutex::new((queue, pool))))
+            };
 
-                if let Ok(pool) = pool {
-                    Ok((*ty, Arc::new(Mutex::new((queue, pool)))))
+            let (graphics_pool, transfer_pool) =
+                if adapter.info.graphics_queue.index == adapter.info.transfer_queue.index {
+                    let pool = pool_creator(
+                        adapter.info.graphics_queue.index,
+                        vk::CommandPoolCreateFlags::empty(),
+                    )?;
+                    (Arc::clone(&pool), pool)
                 } else {
-                    Err(pool.unwrap_err())
-                }
-            })
-            .collect::<std::result::Result<Vec<_>, _>>()?
-            .into_iter()
-            .collect()
+                    let graphics_pool = pool_creator(
+                        adapter.info.graphics_queue.index,
+                        vk::CommandPoolCreateFlags::empty(),
+                    )?;
+                    let transfer_pool = pool_creator(
+                        adapter.info.transfer_queue.index,
+                        vk::CommandPoolCreateFlags::TRANSIENT,
+                    )?;
+                    (graphics_pool, transfer_pool)
+                };
+
+            let mut command_pools = HashMap::with_capacity(2);
+            command_pools.insert(QueueType::Graphics, graphics_pool);
+            command_pools.insert(QueueType::Transfer, transfer_pool);
+            command_pools
         };
 
         Ok(Arc::new(RendererCreator {
+            entry,
             instance,
             adapter,
-            window_size: (window_size.0 as f32, window_size.1 as f32),
+            swapchain,
             device,
             debug_utils: ManuallyDrop::new(debug_utils),
             vma: Arc::new(Mutex::new(vma)),

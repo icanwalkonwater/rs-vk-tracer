@@ -1,7 +1,6 @@
 use crate::{command_recorder::QueueType, errors::Result, renderer_creator::RendererCreator};
 use ash::{version::DeviceV1_0, vk};
 use std::{
-    alloc::dealloc,
     slice::from_ref,
     sync::{Arc, Mutex},
 };
@@ -28,7 +27,7 @@ impl RawBufferAllocation {
             vma,
             &BufferDescription {
                 size: size as vk::DeviceSize,
-                usage: vk::BufferUsageFlags::VERTEX_BUFFER,
+                usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
                 location: vk_mem::MemoryUsage::GpuOnly,
             },
         )
@@ -42,7 +41,7 @@ impl RawBufferAllocation {
             vma,
             &BufferDescription {
                 size: size as vk::DeviceSize,
-                usage: vk::BufferUsageFlags::INDEX_BUFFER,
+                usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
                 location: vk_mem::MemoryUsage::GpuOnly,
             },
         )
@@ -138,22 +137,18 @@ impl RawBufferAllocation {
             .lock()
             .expect("Poisoned");
 
-        dbg!("Creating cmd buffer...");
-
         let buffer = creator.device.allocate_command_buffers(
             &vk::CommandBufferAllocateInfo::builder()
                 .command_pool(queue_pool.1)
                 .command_buffer_count(1)
                 .level(vk::CommandBufferLevel::PRIMARY),
         )?[0];
-        dbg!("Cmd buffer created");
 
         creator.device.begin_command_buffer(
             buffer,
             &vk::CommandBufferBeginInfo::builder()
                 .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
         )?;
-        dbg!("Begin cmd buf");
 
         {
             let copy = vk::BufferCopy::builder()
@@ -161,15 +156,12 @@ impl RawBufferAllocation {
                 .src_offset(self.info.get_offset() as vk::DeviceSize)
                 .dst_offset(other.info.get_offset() as vk::DeviceSize);
 
-            dbg!("Cmd copy buffer");
             creator
                 .device
                 .cmd_copy_buffer(buffer, self.buffer, other.buffer, from_ref(&copy));
-            dbg!("Cmd copy buffer");
         }
 
         creator.device.end_command_buffer(buffer)?;
-        dbg!("Cmd buffer recorded");
 
         let fence = creator
             .device
@@ -180,8 +172,6 @@ impl RawBufferAllocation {
             from_ref(&vk::SubmitInfo::builder().command_buffers(from_ref(&buffer))),
             fence,
         )?;
-
-        dbg!("Cmd buffer submitted");
 
         creator
             .device

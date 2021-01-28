@@ -21,8 +21,6 @@ fn main() -> anyhow::Result<()> {
             version: (0, 0, 0),
         })
         .with_debug_utils(true)
-        .with_validation_layer("VK_LAYER_KHRONOS_validation")
-        .with_validation_layer("VK_LAYER_LUNARG_api_dump")
         //.with_hardware_raytracing()
         .build_with_window(Some(&window), window.inner_size().into())?;
 

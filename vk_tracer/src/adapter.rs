@@ -18,7 +18,7 @@ use crate::{
 };
 
 pub struct AdapterRequirements {
-    pub compatible_surface: Option<Surface>,
+    pub compatible_surface: Option<(ash::extensions::khr::Surface, vk::SurfaceKHR)>,
     pub instance_extensions: Vec<*const c_char>,
     pub required_extensions: Vec<&'static CStr>,
     pub optional_extensions: Vec<&'static CStr>,
@@ -29,9 +29,9 @@ pub struct AdapterRequirements {
 }
 
 impl AdapterRequirements {
-    pub fn default_from_window(surface: Surface, window: &impl HasRawWindowHandle) -> Result<Self> {
+    pub fn default_from_window(surface: &Surface, window: &impl HasRawWindowHandle) -> Result<Self> {
         Ok(Self {
-            compatible_surface: Some(surface),
+            compatible_surface: Some((surface.loader.clone(), surface.handle)),
             instance_extensions: required_instance_extensions_with_surface(false, window)?,
             ..Default::default()
         })

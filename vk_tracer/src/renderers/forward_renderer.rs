@@ -1,9 +1,9 @@
 use crate::{
     errors::Result,
     mesh::{Index, Mesh, Vertex},
-    renderer_creator::{self, RendererCreator},
+    renderer_creator::RendererCreator,
 };
-use ash::{version::DeviceV1_0, vk, Device};
+use ash::{version::DeviceV1_0, vk};
 use std::{fs::File, slice::from_ref, sync::Arc};
 
 pub struct ForwardRenderer {
@@ -62,18 +62,13 @@ impl ForwardRenderer {
             .color_write_mask(vk::ColorComponentFlags::all())
             .blend_enable(false);
 
-        // TODO: use swapchain
+        let swapchain_extent = creator.swapchain.as_ref().unwrap().extent;
         let viewport = vk::Viewport::builder()
-            .width(creator.window_size.0)
-            .height(creator.window_size.1);
+            .width(swapchain_extent.width as f32)
+            .height(swapchain_extent.height as f32);
         let scissors = vk::Rect2D::builder()
-            .extent(
-                vk::Extent2D::builder()
-                    .width(viewport.width as u32)
-                    .height(viewport.height as u32)
-                    .build(),
-            )
-            .offset(vk::Offset2D::builder().build());
+            .extent(swapchain_extent)
+            .offset(vk::Offset2D::default());
         let viewport_state_info = vk::PipelineViewportStateCreateInfo::builder()
             .viewports(from_ref(&viewport))
             .scissors(from_ref(&scissors));

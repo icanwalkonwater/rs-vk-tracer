@@ -30,27 +30,13 @@ pub(crate) fn choose_surface_format(
         .copied()
 }
 
-/// Choose the present mode, will fallback to FIFO if the requirements can't be met.
-pub(crate) fn choose_surface_present_mode(
-    present_modes: &[vk::PresentModeKHR],
-    requirements: &AdapterRequirements,
-) -> vk::PresentModeKHR {
-    for mode in present_modes {
-        if requirements.present_modes.contains(mode) {
-            return *mode;
-        }
-    }
-
-    vk::PresentModeKHR::FIFO
-}
-
 #[derive(Clone)]
 pub struct Surface {
     pub(crate) loader: ash::extensions::khr::Surface,
     pub(crate) handle: vk::SurfaceKHR,
-    format: vk::Format,
-    color_space: vk::ColorSpaceKHR,
-    extent: vk::Extent2D,
+    pub(crate) format: vk::Format,
+    pub(crate) color_space: vk::ColorSpaceKHR,
+    pub(crate) extent: vk::Extent2D,
 }
 
 impl Surface {

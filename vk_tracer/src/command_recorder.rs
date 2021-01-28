@@ -2,5 +2,4 @@
 pub enum QueueType {
     Graphics,
     Transfer,
-    Present,
 }

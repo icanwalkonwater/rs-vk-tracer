@@ -73,7 +73,6 @@ impl<V: Vertex, I: Index> Mesh<V, I> {
                 TypedBuffer::new_vertex_buffer(&creator.vma, vertices.len())?,
             )?;
             staging.store(vertices)?;
-            dbg!("Upload to staging");
             staging.commit()?
         };
 

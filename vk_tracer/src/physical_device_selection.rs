@@ -37,7 +37,6 @@ pub(crate) struct QueueFamilyInfo {
 pub(crate) struct AdapterInfo {
     pub physical_device_info: PhysicalDeviceInfo,
     pub graphics_queue: QueueFamilyInfo,
-    pub present_queue: QueueFamilyInfo,
     pub transfer_queue: QueueFamilyInfo,
     pub score: u32,
 }
@@ -60,17 +59,15 @@ pub(crate) fn pick_adapter(
                 instance.get_physical_device_queue_family_properties(physical_device);
             let memory_properties = instance.get_physical_device_memory_properties(physical_device);
 
-            let surface_capabilities = requirements.compatible_surface.as_ref().map(|surface| {
-                surface
-                    .loader
-                    .get_physical_device_surface_capabilities(physical_device, surface.handle)
+            let surface_capabilities = requirements.compatible_surface.as_ref().map(|(loader, surface)| {
+                loader
+                    .get_physical_device_surface_capabilities(physical_device, *surface)
                     .expect("Failed to get surface capabilities")
             });
 
-            let surface_formats = requirements.compatible_surface.as_ref().map(|surface| {
-                surface
-                    .loader
-                    .get_physical_device_surface_formats(physical_device, surface.handle)
+            let surface_formats = requirements.compatible_surface.as_ref().map(|(loader, surface)| {
+                loader
+                    .get_physical_device_surface_formats(physical_device, *surface)
                     .expect("Faild to get surface formats")
             });
             let surface_format_properties = surface_formats.as_ref().map(|surface_formats| {
@@ -82,10 +79,9 @@ pub(crate) fn pick_adapter(
                     })
                     .collect::<Vec<_>>()
             });
-            let surface_present_modes = requirements.compatible_surface.as_ref().map(|surface| {
-                surface
-                    .loader
-                    .get_physical_device_surface_present_modes(physical_device, surface.handle)
+            let surface_present_modes = requirements.compatible_surface.as_ref().map(|(loader, surface)| {
+                loader
+                    .get_physical_device_surface_present_modes(physical_device, *surface)
                     .expect("Failed to get surface present modes")
             });
 
@@ -232,8 +228,25 @@ fn process_physical_device(
 
     // Present
 
-    // TODO: try to find a dedicated queue
-    let present_queue = info
+    // Juste check if the graphics queue supports it and fail otherwise
+    if let Some((loader, surface)) = requirements.compatible_surface.as_ref() {
+        let support = unsafe {
+            loader
+                .get_physical_device_surface_support(
+                    info.handle,
+                    graphics_queue.index,
+                    *surface,
+                )
+                .unwrap()
+        };
+
+        if !support {
+            error!(" - Graphics queue doesn't support presentation, that's a problem.");
+            return None;
+        }
+    }
+
+    /*let present_queue = info
         .queue_families
         .iter()
         .enumerate()
@@ -270,7 +283,7 @@ fn process_physical_device(
         present_queue.index,
         present_queue.properties.queue_count,
         present_queue.properties.queue_flags,
-    );
+    );*/
 
     // Transfer
 
@@ -326,7 +339,6 @@ fn process_physical_device(
     Some(AdapterInfo {
         physical_device_info: info,
         graphics_queue,
-        present_queue,
         transfer_queue,
         score,
     })

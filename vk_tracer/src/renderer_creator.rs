@@ -15,12 +15,13 @@ use std::{
     mem::ManuallyDrop,
     sync::{Arc, Mutex},
 };
+use crate::swapchain::Swapchain;
 
 pub struct RendererCreator {
+    pub(crate) entry: ash::Entry,
     pub(crate) instance: ash::Instance,
     pub(crate) adapter: Adapter,
-    // TODO: replace with swapchain
-    pub(crate) window_size: (f32, f32),
+    pub(crate) swapchain: Option<Swapchain>,
     pub(crate) device: ash::Device,
     pub(crate) debug_utils: ManuallyDrop<Option<VtDebugUtils>>,
     pub(crate) vma: Arc<Mutex<vk_mem::Allocator>>,
