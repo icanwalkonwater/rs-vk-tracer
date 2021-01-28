@@ -59,17 +59,25 @@ pub(crate) fn pick_adapter(
                 instance.get_physical_device_queue_family_properties(physical_device);
             let memory_properties = instance.get_physical_device_memory_properties(physical_device);
 
-            let surface_capabilities = requirements.compatible_surface.as_ref().map(|(loader, surface)| {
-                loader
-                    .get_physical_device_surface_capabilities(physical_device, *surface)
-                    .expect("Failed to get surface capabilities")
-            });
+            let surface_capabilities =
+                requirements
+                    .compatible_surface
+                    .as_ref()
+                    .map(|(loader, surface)| {
+                        loader
+                            .get_physical_device_surface_capabilities(physical_device, *surface)
+                            .expect("Failed to get surface capabilities")
+                    });
 
-            let surface_formats = requirements.compatible_surface.as_ref().map(|(loader, surface)| {
-                loader
-                    .get_physical_device_surface_formats(physical_device, *surface)
-                    .expect("Faild to get surface formats")
-            });
+            let surface_formats =
+                requirements
+                    .compatible_surface
+                    .as_ref()
+                    .map(|(loader, surface)| {
+                        loader
+                            .get_physical_device_surface_formats(physical_device, *surface)
+                            .expect("Faild to get surface formats")
+                    });
             let surface_format_properties = surface_formats.as_ref().map(|surface_formats| {
                 surface_formats
                     .iter()
@@ -79,11 +87,15 @@ pub(crate) fn pick_adapter(
                     })
                     .collect::<Vec<_>>()
             });
-            let surface_present_modes = requirements.compatible_surface.as_ref().map(|(loader, surface)| {
-                loader
-                    .get_physical_device_surface_present_modes(physical_device, *surface)
-                    .expect("Failed to get surface present modes")
-            });
+            let surface_present_modes =
+                requirements
+                    .compatible_surface
+                    .as_ref()
+                    .map(|(loader, surface)| {
+                        loader
+                            .get_physical_device_surface_present_modes(physical_device, *surface)
+                            .expect("Failed to get surface present modes")
+                    });
 
             PhysicalDeviceInfo {
                 handle: physical_device,
@@ -232,11 +244,7 @@ fn process_physical_device(
     if let Some((loader, surface)) = requirements.compatible_surface.as_ref() {
         let support = unsafe {
             loader
-                .get_physical_device_surface_support(
-                    info.handle,
-                    graphics_queue.index,
-                    *surface,
-                )
+                .get_physical_device_surface_support(info.handle, graphics_queue.index, *surface)
                 .unwrap()
         };
 

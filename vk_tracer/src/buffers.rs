@@ -1,5 +1,6 @@
 use crate::{allocator::RawBufferAllocation, errors::Result, renderer_creator::RendererCreator};
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 pub struct TypedBuffer<D: Copy>(RawBufferAllocation, std::marker::PhantomData<D>);
 

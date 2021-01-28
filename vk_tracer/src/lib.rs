@@ -5,6 +5,7 @@ mod command_recorder;
 mod debug_utils;
 mod extensions;
 mod mesh;
+mod mesh_storage;
 mod physical_device_selection;
 mod queue_indices;
 mod raytracing;

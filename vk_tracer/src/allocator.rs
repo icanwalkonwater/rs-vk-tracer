@@ -1,9 +1,7 @@
 use crate::{command_recorder::QueueType, errors::Result, renderer_creator::RendererCreator};
 use ash::{version::DeviceV1_0, vk};
-use std::{
-    slice::from_ref,
-    sync::{Arc, Mutex},
-};
+use parking_lot::Mutex;
+use std::{slice::from_ref, sync::Arc};
 
 pub struct BufferDescription {
     pub size: vk::DeviceSize,
@@ -65,7 +63,7 @@ impl RawBufferAllocation {
         vma: &Arc<Mutex<vk_mem::Allocator>>,
         desc: &BufferDescription,
     ) -> Result<Self> {
-        let (buffer, allocation, info) = vma.lock().unwrap().create_buffer(
+        let (buffer, allocation, info) = vma.lock().create_buffer(
             &vk::BufferCreateInfo::builder()
                 .size(desc.size)
                 .usage(desc.usage)
@@ -88,7 +86,7 @@ impl RawBufferAllocation {
 impl RawBufferAllocation {
     pub(crate) fn ensure_mapped(&self) -> Result<(bool, *mut u8)> {
         if self.info.get_mapped_data().is_null() {
-            Ok((true, self.vma.lock().unwrap().map_memory(&self.allocation)?))
+            Ok((true, self.vma.lock().map_memory(&self.allocation)?))
         } else {
             Ok((false, self.info.get_mapped_data()))
         }
@@ -113,11 +111,10 @@ impl RawBufferAllocation {
         // Will be ignored if HOST_COHERENT
         self.vma
             .lock()
-            .unwrap()
             .flush_allocation(&self.allocation, 0, size as usize)?;
 
         if need_to_unmap {
-            self.vma.lock().unwrap().unmap_memory(&self.allocation)?;
+            self.vma.lock().unmap_memory(&self.allocation)?;
         }
 
         Ok(())
@@ -134,8 +131,7 @@ impl RawBufferAllocation {
             .command_pools
             .get(&QueueType::Transfer)
             .unwrap()
-            .lock()
-            .expect("Poisoned");
+            .lock();
 
         let buffer = creator.device.allocate_command_buffers(
             &vk::CommandBufferAllocateInfo::builder()
@@ -190,7 +186,6 @@ impl Drop for RawBufferAllocation {
     fn drop(&mut self) {
         self.vma
             .lock()
-            .unwrap()
             .destroy_buffer(self.buffer, &self.allocation)
             .expect("Failed to free VMA buffer");
     }

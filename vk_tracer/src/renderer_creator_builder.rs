@@ -4,10 +4,12 @@ use crate::{
     debug_utils::VtDebugUtils,
     errors::{RendererCreatorError, Result, VtError},
     extensions::{required_instance_extensions, required_instance_extensions_with_surface},
+    mesh_storage::MeshStorage,
     physical_device_selection::pick_adapter,
     queue_indices::QueueFamilyIndices,
     renderer_creator::RendererCreator,
     surface::Surface,
+    swapchain::Swapchain,
     utils::str_to_cstr,
     AppInfo, VULKAN_VERSION,
 };
@@ -15,15 +17,11 @@ use ash::{
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk,
 };
+use parking_lot::Mutex;
 use raw_window_handle::HasRawWindowHandle;
 use std::{
-    collections::HashMap,
-    ffi::CStr,
-    mem::ManuallyDrop,
-    os::raw::c_char,
-    sync::{Arc, Mutex},
+    collections::HashMap, ffi::CStr, mem::ManuallyDrop, ops::Deref, os::raw::c_char, sync::Arc,
 };
-use crate::swapchain::Swapchain;
 
 #[derive(Debug)]
 pub enum PhysicalDeviceChoice {
@@ -97,7 +95,7 @@ impl RendererCreatorBuilder {
         self,
         window: Option<&impl HasRawWindowHandle>,
         window_size: (u32, u32),
-    ) -> Result<Arc<RendererCreator>> {
+    ) -> Result<Arc<Mutex<RendererCreator>>> {
         // Checks
         if let None = self.app_info {
             return Err(VtError::RendererCreatorError(
@@ -258,10 +256,18 @@ impl RendererCreatorBuilder {
         };
         // </editor-fold>
 
+        let device = Arc::new(device);
+
         // Swapchain
         let swapchain = if let Some(mut surface) = surface {
             surface.complete(&adapter);
-            Some(Swapchain::new(&instance, surface, &adapter, &device, window_size)?)
+            Some(Swapchain::new(
+                &instance,
+                surface,
+                &adapter,
+                &device,
+                window_size,
+            )?)
         } else {
             None
         };
@@ -269,7 +275,7 @@ impl RendererCreatorBuilder {
         // Allocator
         let vma = vk_mem::Allocator::new(&vk_mem::AllocatorCreateInfo {
             physical_device: adapter.handle,
-            device: device.clone(),
+            device: (*device).clone(),
             instance: instance.clone(),
             flags: vk_mem::AllocatorCreateFlags::NONE,
             preferred_large_heap_block_size: 0,
@@ -316,15 +322,16 @@ impl RendererCreatorBuilder {
             command_pools
         };
 
-        Ok(Arc::new(RendererCreator {
+        Ok(Arc::new(Mutex::new(RendererCreator {
             entry,
             instance,
             adapter,
-            swapchain,
+            swapchain: ManuallyDrop::new(swapchain),
             device,
             debug_utils: ManuallyDrop::new(debug_utils),
             vma: Arc::new(Mutex::new(vma)),
             command_pools,
-        }))
+            mesh_storage: ManuallyDrop::new(MeshStorage::new()),
+        })))
     }
 }

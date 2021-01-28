@@ -1,7 +1,5 @@
 use crate::renderer_creator::RendererCreator;
-use std::fs::File;
-use std::io::Write;
-use std::{borrow::Cow, ffi::CStr};
+use std::{borrow::Cow, ffi::CStr, fs::File, io::Write};
 
 /// Converts a rust string to a CStr in a kinda safe manner.
 /// Can produce strange thing if the input string isn't valid ASCII.
@@ -19,12 +17,7 @@ pub fn clamp(value: u32, min: u32, max: u32) -> u32 {
 }
 
 pub fn dump_vma_stats(creator: &RendererCreator) {
-    let stats = creator
-        .vma
-        .lock()
-        .unwrap()
-        .build_stats_string(true)
-        .unwrap();
+    let stats = creator.vma.lock().build_stats_string(true).unwrap();
     {
         let mut f = File::create("vma_stats.json").unwrap();
         f.write_all(stats.as_bytes()).unwrap();

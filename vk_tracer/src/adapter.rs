@@ -29,7 +29,10 @@ pub struct AdapterRequirements {
 }
 
 impl AdapterRequirements {
-    pub fn default_from_window(surface: &Surface, window: &impl HasRawWindowHandle) -> Result<Self> {
+    pub fn default_from_window(
+        surface: &Surface,
+        window: &impl HasRawWindowHandle,
+    ) -> Result<Self> {
         Ok(Self {
             compatible_surface: Some((surface.loader.clone(), surface.handle)),
             instance_extensions: required_instance_extensions_with_surface(false, window)?,
@@ -71,5 +74,15 @@ impl Adapter {
             info,
             requirements,
         }
+    }
+
+    pub(crate) fn update_surface_capabilities(&mut self) -> Result<()> {
+        let (loader, surface) = self.requirements.compatible_surface.as_ref().unwrap();
+
+        unsafe {
+            self.info.physical_device_info.surface_capabilities =
+                Some(loader.get_physical_device_surface_capabilities(self.handle, *surface)?);
+        }
+        Ok(())
     }
 }
