@@ -1,10 +1,10 @@
-use crate::physical_device_selection::AdapterInfo;
+use crate::setup::physical_device_selection::AdapterInfo;
 use ash::vk;
 
 const QUEUE_PRIORITIES_ONE: [f32; 1] = [1.0];
 
 #[derive(Copy, Clone)]
-pub(crate) struct QueueFamilyIndices {
+pub struct QueueFamilyIndices {
     pub graphics: u32,
     pub transfer: u32,
 }

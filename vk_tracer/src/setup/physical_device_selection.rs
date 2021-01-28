@@ -3,17 +3,19 @@ use std::{
     ffi::CStr,
 };
 
-use crate::{adapter::AdapterRequirements, errors::Result};
 use ash::{version::InstanceV1_0, vk};
 use log::{debug, error, info};
 
 use crate::{
-    errors::VtError, surface::choose_surface_format, utils::cstr_to_str, VULKAN_VERSION,
-    VULKAN_VERSION_STR,
+    adapter::AdapterRequirements,
+    errors::{Result, VtError},
+    present::surface::choose_surface_format,
+    utils::cstr_to_str,
+    VULKAN_VERSION, VULKAN_VERSION_STR,
 };
 
 #[derive(Debug)]
-pub(crate) struct PhysicalDeviceInfo {
+pub struct PhysicalDeviceInfo {
     pub handle: vk::PhysicalDevice,
     pub properties: vk::PhysicalDeviceProperties,
     pub extensions: Vec<vk::ExtensionProperties>,
@@ -28,20 +30,20 @@ pub(crate) struct PhysicalDeviceInfo {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct QueueFamilyInfo {
+pub struct QueueFamilyInfo {
     pub index: u32,
     pub properties: vk::QueueFamilyProperties,
 }
 
 #[derive(Debug)]
-pub(crate) struct AdapterInfo {
+pub struct AdapterInfo {
     pub physical_device_info: PhysicalDeviceInfo,
     pub graphics_queue: QueueFamilyInfo,
     pub transfer_queue: QueueFamilyInfo,
     pub score: u32,
 }
 
-pub(crate) fn pick_adapter(
+pub fn pick_adapter(
     instance: &ash::Instance,
     requirements: &AdapterRequirements,
 ) -> Result<AdapterInfo> {

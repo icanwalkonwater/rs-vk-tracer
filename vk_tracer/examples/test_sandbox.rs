@@ -23,7 +23,7 @@ fn main() -> anyhow::Result<()> {
         })
         .with_debug_utils(true)
         //.with_hardware_raytracing()
-        .build_with_window(Some(&window), window.inner_size().into())?;
+        .build_with_window(&window, window.inner_size().into())?;
 
     let mesh = renderer_creator.lock().create_mesh(
         &[

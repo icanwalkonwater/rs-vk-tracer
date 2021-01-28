@@ -1,26 +1,29 @@
-use crate::{
-    adapter::{Adapter, AdapterRequirements},
-    command_recorder::QueueType,
-    debug_utils::VtDebugUtils,
-    errors::{RendererCreatorError, Result, VtError},
-    extensions::{required_instance_extensions, required_instance_extensions_with_surface},
-    mesh_storage::MeshStorage,
-    physical_device_selection::pick_adapter,
-    queue_indices::QueueFamilyIndices,
-    renderer_creator::RendererCreator,
-    surface::Surface,
-    swapchain::Swapchain,
-    utils::str_to_cstr,
-    AppInfo, VULKAN_VERSION,
+use std::{
+    collections::HashMap, ffi::CStr, mem::ManuallyDrop, ops::Deref, os::raw::c_char, sync::Arc,
 };
+
 use ash::{
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk,
 };
 use parking_lot::Mutex;
 use raw_window_handle::HasRawWindowHandle;
-use std::{
-    collections::HashMap, ffi::CStr, mem::ManuallyDrop, ops::Deref, os::raw::c_char, sync::Arc,
+
+use crate::{
+    adapter::{Adapter, AdapterRequirements},
+    command_recorder::QueueType,
+    errors::{RendererCreatorError, Result, VtError},
+    mesh_storage::MeshStorage,
+    present::{render_pass::RenderPass, surface::Surface, swapchain::Swapchain},
+    renderer_creator::RendererCreator,
+    setup::{
+        debug_utils::VtDebugUtils,
+        extensions::{required_instance_extensions, required_instance_extensions_with_surface},
+        physical_device_selection::pick_adapter,
+        queue_indices::QueueFamilyIndices,
+    },
+    utils::str_to_cstr,
+    AppInfo, VULKAN_VERSION,
 };
 
 #[derive(Debug)]
@@ -93,7 +96,7 @@ impl RendererCreatorBuilder {
 
     pub fn build_with_window(
         self,
-        window: Option<&impl HasRawWindowHandle>,
+        window: &impl HasRawWindowHandle,
         window_size: (u32, u32),
     ) -> Result<Arc<Mutex<RendererCreator>>> {
         // Checks
@@ -131,11 +134,8 @@ impl RendererCreatorBuilder {
                 .api_version(VULKAN_VERSION);
 
             // Gather extensions, window is optional
-            let extensions = if let Some(window) = window {
-                required_instance_extensions_with_surface(self.install_debug_utils, window)?
-            } else {
-                required_instance_extensions(self.install_debug_utils)
-            };
+            let extensions =
+                required_instance_extensions_with_surface(self.install_debug_utils, window)?;
 
             // Create instance
             let info = vk::InstanceCreateInfo::builder()
@@ -153,11 +153,7 @@ impl RendererCreatorBuilder {
         };
 
         // Create surface
-        let surface = if let Some(window) = window {
-            Some(Surface::create(&entry, &instance, window, window_size)?)
-        } else {
-            None
-        };
+        let mut surface = Surface::create(&entry, &instance, window, window_size)?;
 
         // Create adapter & device
         // <editor-fold>
@@ -166,11 +162,7 @@ impl RendererCreatorBuilder {
         } else {
             // Build adapter requirements
             let adapter_requirements = {
-                let mut requirements = if let Some(window) = window {
-                    AdapterRequirements::default_from_window(surface.as_ref().unwrap(), window)?
-                } else {
-                    AdapterRequirements::default()
-                };
+                let mut requirements = AdapterRequirements::default_from_window(&surface, window)?;
 
                 requirements
                     .validation_layers
@@ -259,18 +251,12 @@ impl RendererCreatorBuilder {
         let device = Arc::new(device);
 
         // Swapchain
-        let swapchain = if let Some(mut surface) = surface {
+        let swapchain = {
             surface.complete(&adapter);
-            Some(Swapchain::new(
-                &instance,
-                surface,
-                &adapter,
-                &device,
-                window_size,
-            )?)
-        } else {
-            None
+            Swapchain::new(&instance, surface, &adapter, &device, window_size)?
         };
+
+        let render_pass = RenderPass::new_default(&device, &swapchain)?;
 
         // Allocator
         let vma = vk_mem::Allocator::new(&vk_mem::AllocatorCreateInfo {
@@ -325,10 +311,11 @@ impl RendererCreatorBuilder {
         Ok(Arc::new(Mutex::new(RendererCreator {
             entry,
             instance,
-            adapter,
-            swapchain: ManuallyDrop::new(swapchain),
-            device,
             debug_utils: ManuallyDrop::new(debug_utils),
+            adapter,
+            device,
+            swapchain: ManuallyDrop::new(swapchain),
+            render_pass: ManuallyDrop::new(render_pass),
             vma: Arc::new(Mutex::new(vma)),
             command_pools,
             mesh_storage: ManuallyDrop::new(MeshStorage::new()),

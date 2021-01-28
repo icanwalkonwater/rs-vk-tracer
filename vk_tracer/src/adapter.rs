@@ -9,12 +9,14 @@ use raw_window_handle::HasRawWindowHandle;
 
 use crate::{
     errors::Result,
-    extensions::{
-        required_device_extensions, required_instance_extensions,
-        required_instance_extensions_with_surface,
+    present::surface::Surface,
+    setup::{
+        extensions::{
+            required_device_extensions, required_instance_extensions,
+            required_instance_extensions_with_surface,
+        },
+        physical_device_selection::AdapterInfo,
     },
-    physical_device_selection::AdapterInfo,
-    surface::Surface,
 };
 
 pub struct AdapterRequirements {

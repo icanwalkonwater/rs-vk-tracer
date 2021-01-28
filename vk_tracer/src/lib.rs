@@ -2,18 +2,13 @@ mod adapter;
 mod allocator;
 mod buffers;
 mod command_recorder;
-mod debug_utils;
-mod extensions;
 mod mesh;
 mod mesh_storage;
-mod physical_device_selection;
-mod queue_indices;
+mod present;
 mod raytracing;
 pub mod renderer_creator;
-pub mod renderer_creator_builder;
 mod renderers;
-mod surface;
-mod swapchain;
+mod setup;
 mod utils;
 
 pub const VULKAN_VERSION: u32 = ash::vk::make_version(1, 2, 0);
@@ -58,5 +53,5 @@ pub mod errors {
 }
 
 pub mod prelude {
-    pub use crate::{mesh::*, renderer_creator::*, renderer_creator_builder::*, AppInfo};
+    pub use crate::{mesh::*, renderer_creator::*, setup::renderer_creator_builder::*, AppInfo};
 }

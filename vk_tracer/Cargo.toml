@@ -9,10 +9,10 @@ edition = "2018"
 [dependencies]
 thiserror = "^1.0.21"
 log = "^0.4.11"
-lazy_static = "1.4.0"
-field-offset = "0.3.2"
-slotmap = "1.0.2"
-parking_lot = "0.11.1"
+lazy_static = "^1.4.0"
+field-offset = "^0.3.2"
+slotmap = "^1.0.2"
+parking_lot = "^0.11.1"
 
 raw-window-handle = "^0.3.3"
 ash = "^0.31.0"
@@ -21,5 +21,5 @@ vk-mem = "^0.2.2"
 
 [dev-dependencies]
 winit = "^0.24.0"
-anyhow = "1.0.38"
-env_logger = "0.8.2"
+anyhow = "^1.0.38"
+env_logger = "^0.8.2"

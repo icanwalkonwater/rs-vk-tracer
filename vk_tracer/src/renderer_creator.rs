@@ -1,28 +1,30 @@
-use crate::{
-    adapter::Adapter,
-    command_recorder::QueueType,
-    debug_utils::VtDebugUtils,
-    errors::Result,
-    mesh::{Mesh, MeshStandard, VertexPosUv},
-    mesh_storage::{MeshId, StandardMeshStorage},
-    renderer_creator_builder::RendererCreatorBuilder,
-    swapchain::Swapchain,
-};
+use std::{collections::HashMap, mem::ManuallyDrop, sync::Arc};
+
 use ash::{
     version::{DeviceV1_0, InstanceV1_0},
     vk,
 };
 use log::debug;
 use parking_lot::Mutex;
-use std::{collections::HashMap, mem::ManuallyDrop, sync::Arc};
+
+use crate::{
+    adapter::Adapter,
+    command_recorder::QueueType,
+    errors::Result,
+    mesh::{Mesh, MeshStandard, VertexPosUv},
+    mesh_storage::{MeshId, StandardMeshStorage},
+    present::{render_pass::RenderPass, swapchain::Swapchain},
+    setup::{debug_utils::VtDebugUtils, renderer_creator_builder::RendererCreatorBuilder},
+};
 
 pub struct RendererCreator {
     pub(crate) entry: ash::Entry,
     pub(crate) instance: ash::Instance,
-    pub(crate) adapter: Adapter,
-    pub(crate) swapchain: ManuallyDrop<Option<Swapchain>>,
-    pub(crate) device: Arc<ash::Device>,
     pub(crate) debug_utils: ManuallyDrop<Option<VtDebugUtils>>,
+    pub(crate) adapter: Adapter,
+    pub(crate) device: Arc<ash::Device>,
+    pub(crate) swapchain: ManuallyDrop<Swapchain>,
+    pub(crate) render_pass: ManuallyDrop<RenderPass>,
     pub(crate) vma: Arc<Mutex<vk_mem::Allocator>>,
     pub(crate) command_pools: HashMap<QueueType, Arc<Mutex<(vk::Queue, vk::CommandPool)>>>,
     pub(crate) mesh_storage: ManuallyDrop<StandardMeshStorage>,
@@ -34,10 +36,8 @@ impl RendererCreator {
     }
 
     pub fn resize(&mut self, window_size: (u32, u32)) -> Result<()> {
-        if let Some(swapchain) = self.swapchain.as_mut() {
-            self.adapter.update_surface_capabilities()?;
-            swapchain.recreate(&self.adapter, window_size)?;
-        }
+        self.adapter.update_surface_capabilities()?;
+        self.swapchain.recreate(&self.adapter, window_size)?;
         debug!("Swapchain recreated to size {:?}", window_size);
 
         Ok(())
@@ -65,6 +65,7 @@ impl Drop for RendererCreator {
         self.vma.lock().destroy();
 
         unsafe {
+            ManuallyDrop::drop(&mut self.render_pass);
             ManuallyDrop::drop(&mut self.swapchain);
         }
 

@@ -62,7 +62,7 @@ impl ForwardRenderer {
             .color_write_mask(vk::ColorComponentFlags::all())
             .blend_enable(false);
 
-        let swapchain_extent = creator.swapchain.as_ref().unwrap().extent;
+        let swapchain_extent = creator.swapchain.extent;
         let viewport = vk::Viewport::builder()
             .width(swapchain_extent.width as f32)
             .height(swapchain_extent.height as f32);

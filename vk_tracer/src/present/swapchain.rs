@@ -1,13 +1,14 @@
+use std::sync::Arc;
+
+use ash::{version::DeviceV1_0, vk};
+
 use crate::{
     adapter::{Adapter, AdapterRequirements},
     errors::Result,
+    present::surface::Surface,
     renderer_creator::RendererCreator,
-    surface::Surface,
     utils::clamp,
 };
-use ash::{version::DeviceV1_0, vk};
-use field_offset::__memoffset::mem::ManuallyDrop;
-use std::sync::Arc;
 
 /// Choose the present mode, will fallback to FIFO if the requirements can't be met.
 pub(crate) fn choose_swapchain_present_mode(
