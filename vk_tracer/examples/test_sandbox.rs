@@ -60,6 +60,9 @@ fn main() -> anyhow::Result<()> {
             info!("FPS: {}", frames / start.elapsed().as_secs_f64());
         }
 
+        frames += 1.0;
+        renderer_creator.lock().draw().unwrap();
+
         match event {
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
