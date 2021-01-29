@@ -1,4 +1,8 @@
-use std::sync::Arc;
+use log::info;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use vk_tracer::prelude::*;
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -43,8 +47,18 @@ fn main() -> anyhow::Result<()> {
         &[0, 1, 2],
     )?;
 
+    let start = Instant::now();
+    let mut last_fps_check = Instant::now();
+    let mut frames = 0.0;
+
     event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
+        // Run as fast a we can
+        *control_flow = ControlFlow::Poll;
+
+        if last_fps_check.elapsed().as_millis() >= 1000 {
+            last_fps_check = Instant::now();
+            info!("FPS: {}", frames / start.elapsed().as_secs_f64());
+        }
 
         match event {
             Event::WindowEvent {

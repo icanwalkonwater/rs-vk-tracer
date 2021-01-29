@@ -3,20 +3,25 @@ use crate::{
     present::{render_pass::RenderPass, swapchain::Swapchain},
 };
 use ash::{version::DeviceV1_0, vk};
-use std::{slice::from_ref, sync::Arc};
+use std::{
+    slice::from_ref,
+    sync::Arc,
+    time::{Duration, Instant, SystemTime},
+};
 
 pub struct MainRenderer {
     device: Arc<ash::Device>,
+    pool: vk::CommandPool,
     pub(crate) commands: vk::CommandBuffer,
 }
 
 impl MainRenderer {
     pub(crate) fn new(
         device: &Arc<ash::Device>,
-        graphics_queue: (vk::Queue, vk::CommandPool),
+        graphics_queue: &(vk::Queue, vk::CommandPool),
         swapchain: &Swapchain,
         render_pass: &RenderPass,
-        swapchain_image_index: usize,
+        swapchain_image_index: u32,
     ) -> Result<Self> {
         let command_buffer = unsafe {
             device.allocate_command_buffers(
@@ -33,14 +38,15 @@ impl MainRenderer {
             {
                 let clear_value = vk::ClearValue {
                     color: vk::ClearColorValue {
-                        float32: [0.0, 0.0, 1.0, 1.0],
+                        float32: [0.4, 0.3, 0.5, 1.0],
                     },
                 };
+
                 device.cmd_begin_render_pass(
                     command_buffer,
                     &vk::RenderPassBeginInfo::builder()
                         .render_pass(render_pass.handle)
-                        .framebuffer(render_pass.framebuffers[swapchain_image_index])
+                        .framebuffer(render_pass.framebuffers[swapchain_image_index as usize])
                         .render_area(
                             vk::Rect2D::builder()
                                 .extent(swapchain.extent)
@@ -61,7 +67,17 @@ impl MainRenderer {
 
         Ok(Self {
             device: Arc::clone(device),
+            pool: graphics_queue.1,
             commands: command_buffer,
         })
+    }
+}
+
+impl Drop for MainRenderer {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .free_command_buffers(self.pool, from_ref(&self.commands));
+        }
     }
 }

@@ -308,6 +308,17 @@ impl RendererCreatorBuilder {
             command_pools
         };
 
+        // Sync objects
+        let render_fence = unsafe {
+            device.create_fence(
+                &vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED),
+                None,
+            )?
+        };
+
+        let render_semaphore =
+            unsafe { device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None)? };
+
         Ok(Arc::new(Mutex::new(RendererCreator {
             entry,
             instance,
@@ -315,10 +326,13 @@ impl RendererCreatorBuilder {
             adapter,
             device,
             swapchain: ManuallyDrop::new(swapchain),
+            swpachain_suboptimal: false,
             render_pass: ManuallyDrop::new(render_pass),
             vma: Arc::new(Mutex::new(vma)),
             command_pools,
             mesh_storage: ManuallyDrop::new(MeshStorage::new()),
+            render_fence,
+            render_semaphore,
         })))
     }
 }

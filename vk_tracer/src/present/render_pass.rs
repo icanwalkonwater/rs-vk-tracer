@@ -49,12 +49,6 @@ impl RenderPass {
 
         // Create associated framebuffers
         let framebuffers = {
-            let mut info = vk::FramebufferCreateInfo::builder()
-                .render_pass(render_pass)
-                .width(swapchain.extent.width)
-                .height(swapchain.extent.height)
-                .layers(1);
-
             let mut framebuffers = Vec::with_capacity(swapchain.image_views.len());
 
             for image_view in swapchain.image_views.iter().copied() {
@@ -81,6 +75,29 @@ impl RenderPass {
             handle: render_pass,
             framebuffers,
         })
+    }
+
+    pub(crate) fn recreate_framebuffers(&mut self, swapchain: &Swapchain) -> Result<()> {
+        for (i, image_view) in swapchain.image_views.iter().copied().enumerate() {
+            let framebuffer = unsafe {
+                self.device.create_framebuffer(
+                    &vk::FramebufferCreateInfo::builder()
+                        .render_pass(self.handle)
+                        .attachments(from_ref(&image_view))
+                        .width(swapchain.extent.width)
+                        .height(swapchain.extent.height)
+                        .layers(1),
+                    None,
+                )?
+            };
+
+            unsafe {
+                self.device.destroy_framebuffer(self.framebuffers[i], None);
+            }
+            self.framebuffers[i] = framebuffer;
+        }
+
+        Ok(())
     }
 }
 

@@ -26,13 +26,15 @@ pub(crate) fn choose_swapchain_present_mode(
 
 pub struct Swapchain {
     device: Arc<ash::Device>,
-    loader: ash::extensions::khr::Swapchain,
+    pub(crate) loader: ash::extensions::khr::Swapchain,
     create_info: vk::SwapchainCreateInfoKHR,
     pub(crate) surface: Surface,
-    pub(crate) swapchain: vk::SwapchainKHR,
+    pub(crate) handle: vk::SwapchainKHR,
     pub(crate) images: Vec<vk::Image>,
     pub(crate) image_views: Vec<vk::ImageView>,
     pub(crate) extent: vk::Extent2D,
+
+    pub(crate) present_semaphore: vk::Semaphore,
 }
 
 impl Swapchain {
@@ -87,15 +89,19 @@ impl Swapchain {
         let images = unsafe { loader.get_swapchain_images(swapchain)? };
         let image_views = Self::create_image_views(device, &loader, &surface, &images)?;
 
+        let present_semaphore =
+            unsafe { device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None)? };
+
         Ok(Self {
             device: Arc::clone(device),
             loader,
             create_info: create_info.build(),
             surface,
-            swapchain,
+            handle: swapchain,
             images,
             image_views,
             extent,
+            present_semaphore,
         })
     }
 
@@ -117,11 +123,11 @@ impl Swapchain {
                 .unwrap(),
         );
         self.create_info.image_extent = self.extent;
-        self.create_info.old_swapchain = self.swapchain;
+        self.create_info.old_swapchain = self.handle;
 
-        self.swapchain = unsafe { self.loader.create_swapchain(&self.create_info, None)? };
+        self.handle = unsafe { self.loader.create_swapchain(&self.create_info, None)? };
 
-        self.images = unsafe { self.loader.get_swapchain_images(self.swapchain)? };
+        self.images = unsafe { self.loader.get_swapchain_images(self.handle)? };
         self.image_views = Self::create_image_views(
             self.device.as_ref(),
             &self.loader,
@@ -130,6 +136,17 @@ impl Swapchain {
         )?;
 
         Ok(())
+    }
+
+    pub(crate) fn acquire_next_image(&self) -> Result<(u32, bool)> {
+        unsafe {
+            Ok(self.loader.acquire_next_image(
+                self.handle,
+                std::u64::MAX,
+                self.present_semaphore,
+                vk::Fence::null(),
+            )?)
+        }
     }
 
     fn create_clamped_extent(
@@ -192,11 +209,13 @@ impl Swapchain {
 impl Drop for Swapchain {
     fn drop(&mut self) {
         unsafe {
+            self.device.destroy_semaphore(self.present_semaphore, None);
+
             for image_view in self.image_views.iter().copied() {
                 self.device.destroy_image_view(image_view, None);
             }
 
-            self.loader.destroy_swapchain(self.swapchain, None);
+            self.loader.destroy_swapchain(self.handle, None);
             // Surface will be dropped just after
         }
     }
