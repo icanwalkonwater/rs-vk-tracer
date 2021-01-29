@@ -4,7 +4,7 @@ use std::{slice::from_ref, sync::Arc};
 
 pub(crate) struct RenderPass {
     device: Arc<ash::Device>,
-    pub(crate) render_pass: vk::RenderPass,
+    pub(crate) handle: vk::RenderPass,
     pub(crate) framebuffers: Vec<vk::Framebuffer>,
 }
 
@@ -78,7 +78,7 @@ impl RenderPass {
 
         Ok(Self {
             device: Arc::clone(device),
-            render_pass,
+            handle: render_pass,
             framebuffers,
         })
     }
@@ -91,7 +91,7 @@ impl Drop for RenderPass {
                 self.device.destroy_framebuffer(framebuffer, None);
             }
 
-            self.device.destroy_render_pass(self.render_pass, None);
+            self.device.destroy_render_pass(self.handle, None);
         }
     }
 }
