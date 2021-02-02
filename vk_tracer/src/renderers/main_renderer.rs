@@ -22,6 +22,7 @@ impl MainRenderer {
         swapchain: &Swapchain,
         render_pass: &RenderPass,
         swapchain_image_index: u32,
+        pipelines: &[vk::CommandBuffer],
     ) -> Result<Self> {
         let command_buffer = unsafe {
             device.allocate_command_buffers(
@@ -57,7 +58,8 @@ impl MainRenderer {
                     vk::SubpassContents::SECONDARY_COMMAND_BUFFERS,
                 );
 
-                // TODO: render every other renderer
+                // Execute other pipelines
+                device.cmd_execute_commands(command_buffer, pipelines);
 
                 device.cmd_end_render_pass(command_buffer);
             }

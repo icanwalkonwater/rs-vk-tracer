@@ -15,7 +15,9 @@ pub trait Vertex: Copy {
     fn binding_desc() -> &'static [vk::VertexInputBindingDescription];
     fn attribute_desc() -> &'static [vk::VertexInputAttributeDescription];
 }
-pub trait Index: Copy {}
+pub trait Index: Copy {
+    fn ty() -> vk::IndexType;
+}
 
 #[derive(Clone, Copy)]
 pub struct VertexPosUv {
@@ -56,11 +58,15 @@ impl Vertex for VertexPosUv {
     }
 }
 
-impl Index for u16 {}
+impl Index for u16 {
+    fn ty() -> vk::IndexType {
+        vk::IndexType::UINT16
+    }
+}
 
 pub struct Mesh<V: Vertex, I: Index> {
-    vertices: TypedBuffer<V>,
-    indices: TypedBuffer<I>,
+    pub(crate) vertices: TypedBuffer<V>,
+    pub(crate) indices: TypedBuffer<I>,
 }
 
 pub type MeshStandard = Mesh<VertexPosUv, u16>;

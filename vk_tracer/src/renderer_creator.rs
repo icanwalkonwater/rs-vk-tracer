@@ -14,11 +14,11 @@ use crate::{
     mesh::{Mesh, MeshStandard, VertexPosUv},
     mesh_storage::{MeshId, StandardMeshStorage},
     present::{render_pass::RenderPass, swapchain::Swapchain},
-    renderers::main_renderer::MainRenderer,
+    renderers::{forward_renderer::ForwardRenderer, main_renderer::MainRenderer},
     setup::{debug_utils::VtDebugUtils, renderer_creator_builder::RendererCreatorBuilder},
 };
 use ash::vk::Queue;
-use std::slice::from_ref;
+use std::{fs::File, slice::from_ref};
 
 pub struct RendererCreator {
     pub(crate) entry: ash::Entry,
@@ -69,7 +69,23 @@ impl RendererCreator {
         Ok(self.mesh_storage.register_mesh(mesh))
     }
 
-    pub fn draw(&mut self) -> Result<()> {
+    pub fn new_forward_renderer(
+        &mut self,
+        mesh: MeshId,
+        vertex: impl Into<File>,
+        fragment: impl Into<File>,
+    ) -> Result<ForwardRenderer> {
+        ForwardRenderer::new::<VertexPosUv, u16>(
+            &self.device,
+            &self.swapchain,
+            &self.render_pass,
+            &mut vertex.into(),
+            &mut fragment.into(),
+            mesh,
+        )
+    }
+
+    pub fn draw(&mut self, pipelines: &[ForwardRenderer]) -> Result<()> {
         // If swapchain suboptimal, recreate it
         if self.swpachain_suboptimal {
             let size = (self.swapchain.extent.width, self.swapchain.extent.height);
@@ -88,6 +104,11 @@ impl RendererCreator {
 
         let mut main_renderer = None;
         {
+            let other_pipelines = pipelines
+                .iter()
+                .map(|renderer| renderer.draw(self, swapchain_image_index).unwrap())
+                .collect::<Vec<_>>();
+
             let graphics_queue = self.command_pools.get(&QueueType::Graphics).unwrap().lock();
             main_renderer = Some(MainRenderer::new(
                 &self.device,
@@ -95,6 +116,7 @@ impl RendererCreator {
                 &self.swapchain,
                 &self.render_pass,
                 swapchain_image_index,
+                &other_pipelines,
             )?);
             let main_renderer = main_renderer.as_ref().unwrap();
 
