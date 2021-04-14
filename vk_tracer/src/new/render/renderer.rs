@@ -1,12 +1,22 @@
-use crate::new::{VkTracerApp, RendererHandle, RenderPlanHandle, RenderTargetHandle};
-use crate::new::pipeline::{RenderablePipelineHandle, VkRecordable};
-use crate::command_recorder::QueueType;
-use ash::version::{DeviceV1_0, DeviceV1_2};
-use crate::new::errors::{Result, VkTracerError, HandleType};
-use ash::vk;
+use crate::{
+    command_recorder::QueueType,
+    new::{
+        errors::{HandleType, Result, VkTracerError},
+        render::{RenderablePipelineHandle, VkRecordable},
+        RenderPlanHandle, RenderTargetHandle, RendererHandle, VkTracerApp,
+    },
+};
+use ash::{
+    version::{DeviceV1_0, DeviceV1_2},
+    vk,
+};
 
 impl VkTracerApp {
-    pub fn new_renderer_from_plan(&mut self, render_plan: RenderPlanHandle, render_target: RenderTargetHandle) -> RendererBuilder {
+    pub fn new_renderer_from_plan(
+        &mut self,
+        render_plan: RenderPlanHandle,
+        render_target: RenderTargetHandle,
+    ) -> RendererBuilder {
         RendererBuilder {
             app: self,
             render_plan,
@@ -14,7 +24,7 @@ impl VkTracerApp {
             clear_color: vk::ClearValue {
                 color: vk::ClearColorValue {
                     float32: [0.0, 0.0, 0.0, 0.0],
-                }
+                },
             },
             current_subpass: 0,
             pipelines_by_subpass: vec![Vec::with_capacity(1)],
@@ -24,7 +34,8 @@ impl VkTracerApp {
 }
 
 pub(crate) struct Renderer {
-    commands: vk::CommandBuffer,
+    pub(crate) commands: vk::CommandBuffer,
+    pub(crate) render_fence: vk::Fence,
 }
 
 pub struct RendererBuilder<'app> {
@@ -40,9 +51,7 @@ pub struct RendererBuilder<'app> {
 impl RendererBuilder<'_> {
     pub fn clear_color(mut self, color: [f32; 4]) -> Self {
         self.clear_color = vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: color
-            }
+            color: vk::ClearColorValue { float32: color },
         };
         self
     }
@@ -60,8 +69,16 @@ impl RendererBuilder<'_> {
     }
 
     pub fn build(self) -> Result<RendererHandle> {
-        let render_plan = self.app.render_plan_storage.get(self.render_plan).ok_or(VkTracerError::InvalidHandle(HandleType::RenderPlan))?;
-        let render_target = self.app.render_target_storage.get(self.render_target).ok_or(VkTracerError::InvalidHandle(HandleType::RenderTarget))?;
+        let render_plan = self
+            .app
+            .render_plan_storage
+            .get(self.render_plan)
+            .ok_or(VkTracerError::InvalidHandle(HandleType::RenderPlan))?;
+        let render_target = self
+            .app
+            .render_target_storage
+            .get(self.render_target)
+            .ok_or(VkTracerError::InvalidHandle(HandleType::RenderTarget))?;
 
         let device = &self.app.device;
         let pool = self.app.command_pools.get(&QueueType::Graphics).unwrap();
@@ -75,30 +92,37 @@ impl RendererBuilder<'_> {
                     &vk::CommandBufferAllocateInfo::builder()
                         .command_pool(pool.1)
                         .level(vk::CommandBufferLevel::SECONDARY)
-                        .command_buffer_count(self.pipelines_amount as u32)
+                        .command_buffer_count(self.pipelines_amount as u32),
                 )?;
 
                 let mut commands_by_subpass = Vec::with_capacity(self.pipelines_by_subpass.len());
 
                 // Iterate through each subpass and record a command buffer at a time
                 for (i, subpass) in self.pipelines_by_subpass.iter().enumerate() {
-
                     let mut subpass_commands = Vec::with_capacity(subpass.len());
 
                     for pipeline in subpass.iter().copied() {
                         // Take a command buffer from the stash
                         let commands = command_pool.pop().unwrap();
 
-                        device.begin_command_buffer(commands, &vk::CommandBufferBeginInfo::builder()
-                            .flags(vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE)
-                            .inheritance_info(&vk::CommandBufferInheritanceInfo::builder()
-                                .render_pass(render_plan.render_pass)
-                                .subpass(i as u32)
-                                .framebuffer(render_target.framebuffer)))?;
+                        device.begin_command_buffer(
+                            commands,
+                            &vk::CommandBufferBeginInfo::builder()
+                                .flags(vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE)
+                                .inheritance_info(
+                                    &vk::CommandBufferInheritanceInfo::builder()
+                                        .render_pass(render_plan.render_pass)
+                                        .subpass(i as u32)
+                                        .framebuffer(render_target.framebuffer),
+                                ),
+                        )?;
 
                         match pipeline {
                             RenderablePipelineHandle::Forward(handle) => {
-                                let pipeline = self.app.forward_pipeline_storage.get(handle).ok_or(VkTracerError::InvalidHandle(HandleType::ForwardPipeline))?;
+                                let pipeline =
+                                    self.app.forward_pipeline_storage.get(handle).ok_or(
+                                        VkTracerError::InvalidHandle(HandleType::ForwardPipeline),
+                                    )?;
                                 pipeline.record_commands(self.app, commands)?;
                             }
                         }
@@ -117,18 +141,26 @@ impl RendererBuilder<'_> {
                 &vk::CommandBufferAllocateInfo::builder()
                     .command_pool(pool.1)
                     .level(vk::CommandBufferLevel::PRIMARY)
-                    .command_buffer_count(1)
+                    .command_buffer_count(1),
             )?[0];
 
-            device.begin_command_buffer(top_level_commands, &vk::CommandBufferBeginInfo::default())?;
+            device
+                .begin_command_buffer(top_level_commands, &vk::CommandBufferBeginInfo::default())?;
 
-            let clear_values = std::iter::repeat(self.clear_color).take(render_plan.attachments.len()).collect::<Box<[_]>>();
+            let clear_values = std::iter::repeat(self.clear_color)
+                .take(render_plan.attachments.len())
+                .collect::<Vec<_>>();
             device.cmd_begin_render_pass2(
                 top_level_commands,
                 &vk::RenderPassBeginInfo::builder()
                     .render_pass(render_plan.render_pass)
                     .framebuffer(render_target.framebuffer)
-                    .render_area(vk::Rect2D::builder().offset(vk::Offset2D::default()).extent(render_target.extent).build())
+                    .render_area(
+                        vk::Rect2D::builder()
+                            .offset(vk::Offset2D::default())
+                            .extent(render_target.extent)
+                            .build(),
+                    )
                     .clear_values(&clear_values),
                 &vk::SubpassBeginInfo::builder()
                     .contents(vk::SubpassContents::SECONDARY_COMMAND_BUFFERS),
@@ -144,15 +176,21 @@ impl RendererBuilder<'_> {
 
                 device.cmd_next_subpass2(
                     top_level_commands,
-                    &vk::SubpassBeginInfo::builder().contents(vk::SubpassContents::SECONDARY_COMMAND_BUFFERS),
+                    &vk::SubpassBeginInfo::builder()
+                        .contents(vk::SubpassContents::SECONDARY_COMMAND_BUFFERS),
                     &vk::SubpassEndInfo::default(),
                 );
             }
+
+            device.cmd_end_render_pass2(top_level_commands, &vk::SubpassEndInfo::default());
 
             device.end_command_buffer(top_level_commands)?;
             top_level_commands
         };
 
-        Ok(self.app.renderer_storage.insert(Renderer { commands }))
+        // Create the fence already signaled because otherwise we will block infinitely when rendering for the first time
+        let render_fence = unsafe { device.create_fence(&vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED), None)? };
+
+        Ok(self.app.renderer_storage.insert(Renderer { commands, render_fence }))
     }
 }

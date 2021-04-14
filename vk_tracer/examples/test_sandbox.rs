@@ -7,14 +7,13 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use vk_tracer::prelude::*;
+use vk_tracer::{dump_vma_stats, prelude::*};
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     platform::run_return::EventLoopExtRunReturn,
     window::WindowBuilder,
 };
-use vk_tracer::dump_vma_stats;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();

@@ -1,14 +1,19 @@
-use crate::new::errors::{HandleType, Result, VkTracerError};
-use crate::new::mesh::Mesh;
-use crate::new::pipeline::VkRecordable;
-use crate::new::render_plan::RenderPlan;
-use crate::new::{ForwardPipelineHandle, MeshHandle, RenderPlanHandle, VkTracerApp};
-use crate::utils::str_to_cstr;
-use ash::version::DeviceV1_0;
-use ash::vk;
-use ash::vk::CommandBuffer;
-use std::io::{Read, Seek};
-use std::slice::from_ref;
+use crate::{
+    new::{
+        errors::{HandleType, Result, VkTracerError},
+        mesh::Mesh,
+        render::VkRecordable,
+        render_plan::RenderPlan,
+        ForwardPipelineHandle, MeshHandle, RenderPlanHandle, VkTracerApp,
+    },
+    utils::str_to_cstr,
+};
+use ash::{version::DeviceV1_0, vk, vk::CommandBuffer};
+use std::{
+    io::{Read, Seek},
+    slice::from_ref,
+};
+use log::debug;
 
 impl VkTracerApp {
     pub fn create_forward_pipeline(
@@ -43,6 +48,7 @@ impl VkTracerApp {
 
 pub(crate) struct ForwardPipeline {
     pub(crate) pipeline: vk::Pipeline,
+    pub(crate) pipeline_layout: vk::PipelineLayout,
     pub(crate) mesh: MeshHandle,
 }
 
@@ -118,7 +124,7 @@ impl ForwardPipeline {
         let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
             .dynamic_states(&[vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);
 
-        let layout = unsafe {
+        let pipeline_layout = unsafe {
             device.create_pipeline_layout(
                 &vk::PipelineLayoutCreateInfo::builder()
                     .set_layouts(&[])
@@ -137,7 +143,7 @@ impl ForwardPipeline {
                 .color_blend_state(&color_blend_state)
                 .viewport_state(&viewport_state_info)
                 .dynamic_state(&dynamic_state)
-                .layout(layout)
+                .layout(pipeline_layout)
                 .render_pass(render_plan.render_pass)
                 .subpass(subpass);
 
@@ -149,6 +155,7 @@ impl ForwardPipeline {
 
         Ok(Self {
             pipeline,
+            pipeline_layout,
             mesh: mesh_handle,
         })
     }

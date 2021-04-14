@@ -3,10 +3,7 @@ use crate::{
     present::{render_pass::RenderPass, swapchain::Swapchain},
 };
 use ash::{version::DeviceV1_0, vk};
-use std::{
-    slice::from_ref,
-    sync::Arc,
-};
+use std::{slice::from_ref, sync::Arc};
 
 pub struct MainRenderer {
     device: Arc<ash::Device>,

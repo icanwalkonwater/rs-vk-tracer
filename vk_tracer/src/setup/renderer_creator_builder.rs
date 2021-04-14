@@ -1,6 +1,4 @@
-use std::{
-    collections::HashMap, ffi::CStr, mem::ManuallyDrop, os::raw::c_char, sync::Arc,
-};
+use std::{collections::HashMap, ffi::CStr, mem::ManuallyDrop, os::raw::c_char, sync::Arc};
 
 use ash::{
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
@@ -17,10 +15,8 @@ use crate::{
     present::{render_pass::RenderPass, surface::Surface, swapchain::Swapchain},
     renderer_creator::RendererCreator,
     setup::{
-        debug_utils::DebugUtils,
-        extensions::{required_instance_extensions_with_surface},
-        physical_device_selection::pick_adapter,
-        queue_indices::QueueFamilyIndices,
+        debug_utils::DebugUtils, extensions::required_instance_extensions_with_surface,
+        physical_device_selection::pick_adapter, queue_indices::QueueFamilyIndices,
     },
     utils::str_to_cstr,
     AppInfo, VULKAN_VERSION,

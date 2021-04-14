@@ -1,15 +1,36 @@
-use crate::new::{VkTracerApp, SwapchainHandle};
-use ash::vk;
-use crate::adapter::{AdapterRequirements, Adapter};
-use crate::present::surface::Surface;
-use crate::new::errors::{Result, VkTracerError};
-use ash::version::DeviceV1_0;
+use crate::{
+    new::adapter::{Adapter, AdapterRequirements},
+    new::{
+        errors::{Result, VkTracerError},
+        SwapchainHandle, VkTracerApp,
+    },
+    new::surface::Surface,
+};
+use ash::{version::DeviceV1_0, vk};
+use crate::new::errors::HandleType;
 
 impl VkTracerApp {
-    pub fn create_swapchain_for_window(&mut self, window_size: (u32, u32)) -> Result<SwapchainHandle> {
-        let surface = self.surface.as_ref().ok_or(VkTracerError::NoSurfaceAvailable)?;
-        let swapchain = Swapchain::new(&self.instance, surface, &self.adapter, &self.device, window_size)?;
+    pub fn create_swapchain_for_window(
+        &mut self,
+        window_size: (u32, u32),
+    ) -> Result<SwapchainHandle> {
+        let surface = self
+            .surface
+            .as_ref()
+            .ok_or(VkTracerError::NoSurfaceAvailable)?;
+        let swapchain = Swapchain::new(
+            &self.instance,
+            surface,
+            &self.adapter,
+            &self.device,
+            window_size,
+        )?;
         Ok(self.swapchain_storage.insert(swapchain))
+    }
+
+    pub fn get_next_swapchain_render_target_index(&self, swapchain: SwapchainHandle) -> Result<(u32, bool)> {
+        let swapchain = self.swapchain_storage.get(swapchain).ok_or(VkTracerError::InvalidHandle(HandleType::Swapchain))?;
+        swapchain.acquire_next_image()
     }
 }
 
@@ -34,6 +55,8 @@ pub(crate) struct Swapchain {
     pub(crate) images: Vec<vk::Image>,
     pub(crate) image_views: Vec<vk::ImageView>,
     pub(crate) extent: vk::Extent2D,
+
+    pub(crate) image_available_semaphore: vk::Semaphore,
 }
 
 impl Swapchain {
@@ -88,6 +111,8 @@ impl Swapchain {
         let images = unsafe { loader.get_swapchain_images(swapchain)? };
         let image_views = Self::create_image_views(device, &surface, &images)?;
 
+        let image_available_semaphore = unsafe { device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None)? };
+
         Ok(Self {
             loader,
             create_info: create_info.build(),
@@ -95,10 +120,17 @@ impl Swapchain {
             images,
             image_views,
             extent,
+            image_available_semaphore,
         })
     }
 
-    pub(crate) fn recreate(&mut self, device: &ash::Device, adapter: &Adapter, surface: &Surface, window_size: (u32, u32)) -> Result<()> {
+    pub(crate) fn recreate(
+        &mut self,
+        device: &ash::Device,
+        adapter: &Adapter,
+        surface: &Surface,
+        window_size: (u32, u32),
+    ) -> Result<()> {
         unsafe {
             // Destroy previous swapchain images
             for image_view in self.image_views.iter().copied() {
@@ -121,11 +153,7 @@ impl Swapchain {
         self.handle = unsafe { self.loader.create_swapchain(&self.create_info, None)? };
 
         self.images = unsafe { self.loader.get_swapchain_images(self.handle)? };
-        self.image_views = Self::create_image_views(
-            device,
-            surface,
-            &self.images,
-        )?;
+        self.image_views = Self::create_image_views(device, surface, &self.images)?;
 
         Ok(())
     }
@@ -135,7 +163,7 @@ impl Swapchain {
             Ok(self.loader.acquire_next_image(
                 self.handle,
                 u64::MAX,
-                vk::Semaphore::null(),
+                self.image_available_semaphore,
                 vk::Fence::null(),
             )?)
         }
@@ -148,7 +176,7 @@ impl Swapchain {
         vk::Extent2D::builder()
             .width(window_size.0.clamp(
                 capabilities.min_image_extent.width,
-                capabilities.max_image_extent.width
+                capabilities.max_image_extent.width,
             ))
             .height(window_size.1.clamp(
                 capabilities.min_image_extent.height,

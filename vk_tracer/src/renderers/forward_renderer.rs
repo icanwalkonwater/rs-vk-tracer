@@ -5,7 +5,7 @@ use crate::{
     mesh_storage::MeshId,
     present::{render_pass::RenderPass, swapchain::Swapchain},
     renderer_creator::RendererCreator,
-    utils::{str_to_cstr},
+    utils::str_to_cstr,
 };
 use ash::{version::DeviceV1_0, vk};
 use std::{fs::File, slice::from_ref, sync::Arc};
@@ -171,7 +171,7 @@ impl ForwardRenderer {
                             .subpass(0)
                             .framebuffer(creator.render_pass.framebuffers[frame_index as usize]),
                     ),
-            );
+            )?;
 
             creator.device.cmd_bind_vertex_buffers(
                 buffer,

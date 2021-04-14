@@ -25,10 +25,8 @@ impl DebugUtils {
 
         Ok(Self { loader, messenger })
     }
-}
 
-impl Drop for DebugUtils {
-    fn drop(&mut self) {
+    pub(crate) fn destroy(self) {
         unsafe {
             self.loader
                 .destroy_debug_utils_messenger(self.messenger, None);

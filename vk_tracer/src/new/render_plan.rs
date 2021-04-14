@@ -1,15 +1,20 @@
-use ash::vk;
-use ash::version::DeviceV1_2;
-use crate::new::{VkTracerApp, RenderPlanHandle};
-use crate::new::errors::{Result};
-use crate::new::mem::image::ImageViewFatHandle;
+use crate::new::{errors::Result, mem::image::ImageViewFatHandle, RenderPlanHandle, VkTracerApp};
+use ash::{version::DeviceV1_2, vk};
 
 impl VkTracerApp {
-    pub fn new_render_plan(&mut self) -> RenderPlanBuilder {
+    pub fn new_render_plan(
+        &mut self,
+        dependency: Option<vk::SubpassDependency2>,
+    ) -> RenderPlanBuilder {
         RenderPlanBuilder {
             app: self,
             attachments: Vec::new(),
             references: Vec::new(),
+            dependencies: if let Some(dependency) = dependency {
+                vec![dependency]
+            } else {
+                Vec::new()
+            },
             subpasses: Vec::new(),
         }
     }
@@ -27,6 +32,7 @@ pub struct RenderPlanBuilder<'app> {
     app: &'app mut VkTracerApp,
     attachments: Vec<vk::AttachmentDescription2>,
     references: Vec<vk::AttachmentReference2>,
+    dependencies: Vec<vk::SubpassDependency2>,
     subpasses: Vec<SubpassBuilder>,
 }
 
@@ -54,8 +60,15 @@ impl RenderPlanBuilder<'_> {
         Ok(self)
     }
 
-    pub fn add_subpass(mut self, subpass: SubpassBuilder) -> Self {
+    pub fn add_subpass(
+        mut self,
+        subpass: SubpassBuilder,
+        dependency: Option<vk::SubpassDependency2>,
+    ) -> Self {
         self.subpasses.push(subpass);
+        if let Some(dependency) = dependency {
+            self.dependencies.push(dependency);
+        }
         self
     }
 
@@ -64,17 +77,21 @@ impl RenderPlanBuilder<'_> {
         let mut subpasses_references = Vec::with_capacity(self.subpasses.len());
 
         for subpass in &self.subpasses {
-            subpasses_references.push(subpass.color_attachments.iter()
-                .copied()
-                .map(|i| self.references[i])
-                .collect::<Box<[_]>>()
+            subpasses_references.push(
+                subpass
+                    .color_attachments
+                    .iter()
+                    .copied()
+                    .map(|i| self.references[i])
+                    .collect::<Box<[_]>>(),
             );
 
             // Ok we can build because we know that the attachments will not move or drop
-            subpasses.push(vk::SubpassDescription2::builder()
-                .pipeline_bind_point(subpass.bind_point)
-                .color_attachments(subpasses_references.last().unwrap())
-                .build()
+            subpasses.push(
+                vk::SubpassDescription2::builder()
+                    .pipeline_bind_point(subpass.bind_point)
+                    .color_attachments(subpasses_references.last().unwrap())
+                    .build(),
             );
         }
 
@@ -82,6 +99,7 @@ impl RenderPlanBuilder<'_> {
             self.app.device.create_render_pass2(
                 &vk::RenderPassCreateInfo2::builder()
                     .attachments(&self.attachments)
+                    .dependencies(&self.dependencies)
                     .subpasses(&subpasses),
                 None,
             )?

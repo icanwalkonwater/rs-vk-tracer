@@ -1,12 +1,18 @@
-use crate::command_recorder::QueueType;
-use crate::new::errors::Result;
-use crate::new::mem::allocator::RawBufferAllocation;
-use crate::new::mem::buffers::{TypedBuffer, TypedBufferWithStaging};
-use crate::new::{MeshHandle, VkTracerApp};
+use crate::{
+    command_recorder::QueueType,
+    new::{
+        errors::Result,
+        mem::{
+            allocator::RawBufferAllocation,
+            buffers::{TypedBuffer, TypedBufferWithStaging},
+        },
+        MeshHandle, VkTracerApp,
+    },
+};
 use ash::vk;
-use lazy_static::lazy_static;
-use std::any::{TypeId};
 use field_offset::offset_of;
+use lazy_static::lazy_static;
+use std::any::TypeId;
 
 impl VkTracerApp {
     pub fn create_mesh_indexed<V: MeshVertex, I: MeshIndex>(
@@ -31,27 +37,27 @@ pub trait MeshVertex: Copy + 'static {
 }
 
 lazy_static! {
-        static ref VERTEX_XYZ_UV_BINDING_DESC: [vk::VertexInputBindingDescription; 1] =
-            [vk::VertexInputBindingDescription::builder()
-                .binding(0)
-                .stride(std::mem::size_of::<VertexXyzUv>() as u32)
-                .input_rate(vk::VertexInputRate::VERTEX)
-                .build(),];
-        static ref VERTEX_XYZ_UV_ATTRIBUTE_DESC: [vk::VertexInputAttributeDescription; 2] = [
-            vk::VertexInputAttributeDescription::builder()
-                .binding(0)
-                .location(0)
-                .format(vk::Format::R32G32B32_SFLOAT)
-                .offset(offset_of!(VertexXyzUv => xyz).get_byte_offset() as u32)
-                .build(),
-            vk::VertexInputAttributeDescription::builder()
-                .binding(0)
-                .location(1)
-                .format(vk::Format::R32G32_SFLOAT)
-                .offset(offset_of!(VertexXyzUv => uv).get_byte_offset() as u32)
-                .build(),
-        ];
-    }
+    static ref VERTEX_XYZ_UV_BINDING_DESC: [vk::VertexInputBindingDescription; 1] =
+        [vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(std::mem::size_of::<VertexXyzUv>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build(),];
+    static ref VERTEX_XYZ_UV_ATTRIBUTE_DESC: [vk::VertexInputAttributeDescription; 2] = [
+        vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(0)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset(offset_of!(VertexXyzUv => xyz).get_byte_offset() as u32)
+            .build(),
+        vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(1)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset(offset_of!(VertexXyzUv => uv).get_byte_offset() as u32)
+            .build(),
+    ];
+}
 
 #[derive(Copy, Clone, Debug)]
 pub struct VertexXyzUv {
@@ -81,7 +87,11 @@ impl MeshIndex for u16 {
 
 pub struct Mesh {
     pub(crate) vertices: RawBufferAllocation,
-    pub(crate) vertex_desc: (TypeId, &'static [vk::VertexInputBindingDescription], &'static [vk::VertexInputAttributeDescription]),
+    pub(crate) vertex_desc: (
+        TypeId,
+        &'static [vk::VertexInputBindingDescription],
+        &'static [vk::VertexInputAttributeDescription],
+    ),
     pub(crate) indices: RawBufferAllocation,
     pub(crate) indices_len: u32,
     pub(crate) index_ty: (TypeId, vk::IndexType),
@@ -101,7 +111,7 @@ impl Mesh {
                 TypedBuffer::new_vertex_buffer(vma, vertices.len())?,
             )?;
             staging.store(vma, vertices)?;
-            staging.commit(device, transfer_pool)?
+            staging.commit(vma, device, transfer_pool)?
         };
 
         let indices = {
@@ -110,14 +120,18 @@ impl Mesh {
                 TypedBuffer::new_index_buffer(vma, indices.len())?,
             )?;
             staging.store(vma, indices)?;
-            staging.commit(device, transfer_pool)?
+            staging.commit(vma, device, transfer_pool)?
         };
 
         let indices_len = indices.len() as u32;
 
         Ok(Self {
             vertices: vertices.into_raw(),
-            vertex_desc: (TypeId::of::<V>(), V::binding_description(), V::attribute_description()),
+            vertex_desc: (
+                TypeId::of::<V>(),
+                V::binding_description(),
+                V::attribute_description(),
+            ),
             indices: indices.into_raw(),
             indices_len,
             index_ty: (TypeId::of::<I>(), I::ty()),

@@ -1,4 +1,4 @@
-use crate::{new::mem::allocator::RawBufferAllocation, new::errors::Result};
+use crate::new::{errors::Result, mem::allocator::RawBufferAllocation};
 use ash::vk;
 
 pub struct TypedBuffer<D: Copy>(RawBufferAllocation, std::marker::PhantomData<D>);
@@ -10,10 +10,7 @@ impl<D: Copy> TypedBuffer<D> {
         Self(raw, std::marker::PhantomData)
     }
 
-    pub(crate) fn new_vertex_buffer(
-        vma: &vk_mem::Allocator,
-        size: usize,
-    ) -> Result<Self> {
+    pub(crate) fn new_vertex_buffer(vma: &vk_mem::Allocator, size: usize) -> Result<Self> {
         unsafe {
             Ok(TypedBuffer::from_raw(
                 RawBufferAllocation::new_vertex_buffer(vma, size * std::mem::size_of::<D>())?,
@@ -21,10 +18,7 @@ impl<D: Copy> TypedBuffer<D> {
         }
     }
 
-    pub(crate) fn new_index_buffer(
-        vma: &vk_mem::Allocator,
-        size: usize,
-    ) -> Result<Self> {
+    pub(crate) fn new_index_buffer(vma: &vk_mem::Allocator, size: usize) -> Result<Self> {
         unsafe {
             Ok(TypedBuffer::from_raw(
                 RawBufferAllocation::new_index_buffer(vma, size * std::mem::size_of::<D>())?,
@@ -68,10 +62,7 @@ impl<D: Copy> TypedBufferWithStaging<D> {
         dst: TypedBuffer<D>,
     ) -> Result<TypedBufferWithStaging<D>> {
         let staging = RawBufferAllocation::new_staging_buffer(vma, dst.0.info.get_size())?;
-        Ok(TypedBufferWithStaging {
-            staging,
-            dst,
-        })
+        Ok(TypedBufferWithStaging { staging, dst })
     }
 
     pub(crate) fn new_raw(
@@ -86,11 +77,17 @@ impl<D: Copy> TypedBufferWithStaging<D> {
         unsafe { self.staging.store(vma, &data[..amount]) }
     }
 
-    pub fn commit(mut self, device: &ash::Device, pool: (vk::Queue, vk::CommandPool)) -> Result<TypedBuffer<D>> {
+    pub fn commit(
+        mut self,
+        vma: &vk_mem::Allocator,
+        device: &ash::Device,
+        pool: (vk::Queue, vk::CommandPool),
+    ) -> Result<TypedBuffer<D>> {
         unsafe {
             self.staging.copy_to(device, pool, self.dst.as_raw_mut())?;
         }
 
+        self.staging.destroy(vma)?;
         Ok(self.dst)
     }
 }

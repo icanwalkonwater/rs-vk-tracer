@@ -1,20 +1,24 @@
-use std::borrow::Cow;
-use std::collections::{HashSet, HashMap};
-use crate::new::{VkTracerApp, VULKAN_VERSION};
+use crate::{
+    new::adapter::{Adapter, AdapterRequirements},
+    command_recorder::QueueType,
+    new::{errors::Result, surface::Surface, VkTracerApp, VULKAN_VERSION, physical_device_selection::pick_adapter, queue_indices::QueueFamilyIndices},
+    setup::{
+        debug_utils::DebugUtils,
+        extensions::{required_instance_extensions, required_instance_extensions_with_surface},
+    },
+    utils::str_to_cstr,
+};
+use ash::{
+    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
+    vk,
+};
 use raw_window_handle::HasRawWindowHandle;
-use crate::new::errors::Result;
-use ash::vk;
-use crate::utils::str_to_cstr;
-use std::ffi::{CString, CStr};
-use crate::setup::extensions::{required_instance_extensions_with_surface, required_instance_extensions};
-use ash::version::{EntryV1_0, InstanceV1_0, DeviceV1_0};
-use crate::setup::debug_utils::DebugUtils;
-use crate::present::surface::Surface;
-use crate::adapter::{AdapterRequirements, Adapter};
-use crate::setup::physical_device_selection::pick_adapter;
-use crate::setup::queue_indices::QueueFamilyIndices;
-use crate::command_recorder::QueueType;
 use slotmap::SlotMap;
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    ffi::{CStr, CString},
+};
 
 // TODO: Remove unwrap
 
@@ -37,7 +41,7 @@ pub struct VkTracerAppBuilder {
 }
 
 impl VkTracerApp {
-    pub fn builder<W: HasRawWindowHandle>() -> VkTracerAppBuilder {
+    pub fn builder() -> VkTracerAppBuilder {
         VkTracerAppBuilder {
             physical_device_preference: PhysicalDevicePreference::Best,
             app_name: Cow::Borrowed("Unnamed"),
@@ -70,7 +74,10 @@ impl VkTracerAppBuilder {
         self
     }
 
-    pub fn build<W: HasRawWindowHandle>(self, window: Option<(&W, (u32, u32))>) -> Result<VkTracerApp> {
+    pub fn build<W: HasRawWindowHandle>(
+        self,
+        window: Option<(&W, (u32, u32))>,
+    ) -> Result<VkTracerApp> {
         let entry = ash::Entry::new()?;
 
         let instance = {
@@ -122,13 +129,19 @@ impl VkTracerAppBuilder {
         let (adapter, device) = {
             // Build adapter requirements
             let adapter_requirements = {
-                let mut requirements = if let (Some((window, _)), Some(surface)) = (window.as_ref(), surface.as_ref()) {
+                let mut requirements = if let (Some((window, _)), Some(surface)) =
+                    (window.as_ref(), surface.as_ref())
+                {
                     AdapterRequirements::default_from_window(surface, *window).unwrap()
                 } else {
                     AdapterRequirements::default()
                 };
 
-                requirements.required_extensions.extend(vk_tracer_extensions_to_vk_extensions(self.extensions.iter()));
+                requirements
+                    .required_extensions
+                    .extend(vk_tracer_extensions_to_vk_extensions(
+                        self.extensions.iter(),
+                    ));
                 requirements
             };
 
@@ -238,7 +251,9 @@ impl VkTracerAppBuilder {
     }
 }
 
-fn vk_tracer_extensions_to_vk_extensions<'a>(extensions: impl Iterator<Item=&'a VkTracerExtensions>) -> impl Iterator<Item=&'static CStr> {
+fn vk_tracer_extensions_to_vk_extensions<'a>(
+    extensions: impl Iterator<Item = &'a VkTracerExtensions>,
+) -> impl Iterator<Item = &'static CStr> {
     use ash::extensions::khr;
 
     let mut res = HashSet::new();

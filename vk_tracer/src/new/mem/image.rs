@@ -1,7 +1,10 @@
-use crate::new::errors::{HandleType, Result, VkTracerError};
-use crate::new::{SwapchainHandle, VkTracerApp};
+use crate::new::{
+    errors::{HandleType, Result, VkTracerError},
+    SwapchainHandle, VkTracerApp,
+};
 use ash::vk;
 
+#[derive(Copy, Clone)]
 pub struct ImageViewFatHandle {
     pub(crate) handle: vk::Image,
     pub(crate) view: vk::ImageView,

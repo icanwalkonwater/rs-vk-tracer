@@ -4,13 +4,13 @@ mod buffers;
 mod command_recorder;
 mod mesh;
 mod mesh_storage;
+pub mod new;
 mod present;
 mod raytracing;
 pub mod renderer_creator;
 mod renderers;
 mod setup;
 mod utils;
-pub mod new;
 pub use utils::dump_vma_stats;
 
 pub const VULKAN_VERSION: u32 = ash::vk::make_version(1, 2, 0);
@@ -55,5 +55,8 @@ pub mod errors {
 }
 
 pub mod prelude {
-    pub use crate::{mesh::*, renderer_creator::*, setup::renderer_creator_builder::*, AppInfo, command_recorder::QueueType};
+    pub use crate::{
+        command_recorder::QueueType, mesh::*, renderer_creator::*,
+        setup::renderer_creator_builder::*, AppInfo,
+    };
 }

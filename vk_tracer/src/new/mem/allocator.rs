@@ -1,6 +1,6 @@
-use crate::{new::errors::Result};
+use crate::new::errors::Result;
 use ash::{version::DeviceV1_0, vk};
-use std::{slice::from_ref};
+use std::slice::from_ref;
 
 pub struct BufferDescription {
     pub size: vk::DeviceSize,
@@ -15,10 +15,7 @@ pub struct RawBufferAllocation {
 }
 
 impl RawBufferAllocation {
-    pub(crate) fn new_vertex_buffer(
-        vma: &vk_mem::Allocator,
-        size: usize,
-    ) -> Result<Self> {
+    pub(crate) fn new_vertex_buffer(vma: &vk_mem::Allocator, size: usize) -> Result<Self> {
         Self::new(
             vma,
             &BufferDescription {
@@ -29,10 +26,7 @@ impl RawBufferAllocation {
         )
     }
 
-    pub(crate) fn new_index_buffer(
-        vma: &vk_mem::Allocator,
-        size: usize,
-    ) -> Result<Self> {
+    pub(crate) fn new_index_buffer(vma: &vk_mem::Allocator, size: usize) -> Result<Self> {
         Self::new(
             vma,
             &BufferDescription {
@@ -43,10 +37,7 @@ impl RawBufferAllocation {
         )
     }
 
-    pub(crate) fn new_staging_buffer(
-        vma: &vk_mem::Allocator,
-        size: usize,
-    ) -> Result<Self> {
+    pub(crate) fn new_staging_buffer(vma: &vk_mem::Allocator, size: usize) -> Result<Self> {
         Self::new(
             vma,
             &BufferDescription {
@@ -57,10 +48,7 @@ impl RawBufferAllocation {
         )
     }
 
-    pub(crate) fn new(
-        vma: &vk_mem::Allocator,
-        desc: &BufferDescription,
-    ) -> Result<Self> {
+    pub(crate) fn new(vma: &vk_mem::Allocator, desc: &BufferDescription) -> Result<Self> {
         let (buffer, allocation, info) = vma.create_buffer(
             &vk::BufferCreateInfo::builder()
                 .size(desc.size)
@@ -142,14 +130,12 @@ impl RawBufferAllocation {
                 .src_offset(self.info.get_offset() as vk::DeviceSize)
                 .dst_offset(other.info.get_offset() as vk::DeviceSize);
 
-            device
-                .cmd_copy_buffer(buffer, self.buffer, other.buffer, from_ref(&copy));
+            device.cmd_copy_buffer(buffer, self.buffer, other.buffer, from_ref(&copy));
         }
 
         device.end_command_buffer(buffer)?;
 
-        let fence = device
-            .create_fence(&vk::FenceCreateInfo::default(), None)?;
+        let fence = device.create_fence(&vk::FenceCreateInfo::default(), None)?;
 
         device.queue_submit(
             pool.0,
@@ -157,22 +143,16 @@ impl RawBufferAllocation {
             fence,
         )?;
 
-        device
-            .wait_for_fences(from_ref(&fence), true, std::u64::MAX)?;
+        device.wait_for_fences(from_ref(&fence), true, std::u64::MAX)?;
 
         device.destroy_fence(fence, None);
-        device
-            .free_command_buffers(pool.1, from_ref(&buffer));
+        device.free_command_buffers(pool.1, from_ref(&buffer));
 
         Ok(())
     }
-}
 
-impl Drop for RawBufferAllocation {
-    fn drop(&mut self) {
-        /*self.vma
-            .lock()
-            .destroy_buffer(self.buffer, &self.allocation)
-            .expect("Failed to free VMA buffer");*/
+    pub(crate) fn destroy(self, vma: &vk_mem::Allocator) -> Result<()> {
+        vma.destroy_buffer(self.buffer, &self.allocation)?;
+        Ok(())
     }
 }
