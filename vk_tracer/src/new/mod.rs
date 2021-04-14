@@ -8,6 +8,7 @@ use crate::new::mesh::Mesh;
 use crate::present::surface::Surface;
 use crate::new::swapchain::Swapchain;
 use crate::new::render_plan::RenderPlan;
+use crate::new::render_target::RenderTarget;
 
 mod app_builder;
 mod mesh;
@@ -23,6 +24,7 @@ new_key_type! {
     pub struct MeshHandle;
     pub struct SwapchainHandle;
     pub struct RenderPlanHandle;
+    pub struct RenderTargetHandle;
 }
 
 pub struct VkTracerApp {
@@ -38,6 +40,7 @@ pub struct VkTracerApp {
     pub(crate) mesh_storage: SlotMap<MeshHandle, Mesh>,
     pub(crate) swapchain_storage: SlotMap<SwapchainHandle, Swapchain>,
     pub(crate) render_plan_storage: SlotMap<RenderPlanHandle, RenderPlan>,
+    pub(crate) render_target_storage: SlotMap<RenderTargetHandle, RenderTarget>,
 }
 
 pub mod errors {
@@ -65,7 +68,7 @@ pub mod errors {
 
     #[derive(Debug)]
     pub enum HandleType {
-        Mesh, Swapchain, ImageView,
+        Mesh, Swapchain, RenderPlan, RenderTarget
     }
 }
 

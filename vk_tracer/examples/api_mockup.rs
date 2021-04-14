@@ -55,7 +55,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut my_render_targets_handles = Vec::with_capacity(my_swapchain_images_ref.len());
     for my_color_attachment_handle in my_swapchain_images_ref {
-        my_render_targets_handles.push(graphics.allocate_render_target(my_render_plan_handle, &[my_color_attachment_handle]));
+        my_render_targets_handles.push(graphics.allocate_render_target(my_render_plan_handle, [my_color_attachment_handle])?);
     }
 
     let my_mesh_pipeline_handle = graphics.create_forward_pipeline(my_render_plan_handle, "simple.vert", "simple.frag");

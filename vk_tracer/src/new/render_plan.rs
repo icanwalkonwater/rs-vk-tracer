@@ -16,11 +16,11 @@ impl VkTracerApp {
 }
 
 pub(crate) struct RenderPlan {
-    render_pass: vk::RenderPass,
+    pub(crate) render_pass: vk::RenderPass,
     // Data used to recreate the render pass when necessary
-    attachments: Vec<vk::AttachmentDescription2>,
-    references: Vec<vk::AttachmentReference2>,
-    subpasses: Vec<SubpassBuilder>,
+    pub(crate) attachments: Vec<vk::AttachmentDescription2>,
+    pub(crate) references: Vec<vk::AttachmentReference2>,
+    pub(crate) subpasses: Vec<SubpassBuilder>,
 }
 
 pub struct RenderPlanBuilder<'app> {
