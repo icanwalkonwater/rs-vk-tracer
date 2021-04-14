@@ -232,6 +232,8 @@ impl VkTracerAppBuilder {
             swapchain_storage: SlotMap::with_key(),
             render_plan_storage: SlotMap::with_key(),
             render_target_storage: SlotMap::with_key(),
+            forward_pipeline_storage: SlotMap::with_key(),
+            renderer_storage: SlotMap::with_key(),
         })
     }
 }

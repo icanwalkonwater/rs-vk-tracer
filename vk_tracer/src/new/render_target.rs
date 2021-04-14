@@ -5,6 +5,7 @@ use crate::new::mem::image::ImageViewFatHandle;
 use ash::version::DeviceV1_0;
 
 impl VkTracerApp {
+    /// The first attachment must be the color attachment
     pub fn allocate_render_target<const N: usize>(&mut self, render_plan_handle: RenderPlanHandle, attachments: [ImageViewFatHandle; N]) -> Result<RenderTargetHandle> {
         let render_plan = self.render_plan_storage.get(render_plan_handle).ok_or(VkTracerError::InvalidHandle(HandleType::RenderPlan))?;
         debug_assert_eq!(render_plan.attachments.len(), N);
@@ -26,10 +27,11 @@ impl VkTracerApp {
             )?
         };
 
-        Ok(self.render_target_storage.insert(RenderTarget { framebuffer }))
+        Ok(self.render_target_storage.insert(RenderTarget { framebuffer, extent: attachments[0].extent }))
     }
 }
 
 pub(crate) struct RenderTarget {
-    framebuffer: vk::Framebuffer,
+    pub(crate) framebuffer: vk::Framebuffer,
+    pub(crate) extent: vk::Extent2D,
 }

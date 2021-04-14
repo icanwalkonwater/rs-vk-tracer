@@ -58,20 +58,14 @@ fn main() -> anyhow::Result<()> {
         my_render_targets_handles.push(graphics.allocate_render_target(my_render_plan_handle, [my_color_attachment_handle])?);
     }
 
-    let my_mesh_pipeline_handle = graphics.create_forward_pipeline(my_render_plan_handle, "simple.vert", "simple.frag");
-    // Bind an additional mesh
-    graphics.bind_to_forward_pipeline(my_mesh_pipeline_handle, &[my_mesh_handle]);
-    // Can unbind too
-    // graphics.unbind_from_forward_pipeline(my_mesh_pipeline_handle, &[my_mesh_handle]);
+    let my_mesh_pipeline_handle = graphics.create_forward_pipeline(my_render_plan_handle, 0, "simple.vert", "simple.frag", my_mesh_handle)?;
 
     let mut my_renderer_handles = Vec::with_capacity(my_render_targets_handles.len());
     for my_render_target_handle in my_render_targets_handles {
         my_renderer_handles.push(
             graphics.new_renderer_from_plan(my_render_plan_handle, my_render_target_handle)
-                .execute_pipeline(my_mesh_pipeline_handle)
-                // .next_subpass()
-                // .execute_pipeline(...)
-                .build()
+                .execute_pipeline(my_mesh_pipeline_handle.into())
+                .build()?
         );
     }
 
