@@ -1,14 +1,13 @@
 use crate::{
     command_recorder::QueueType,
     errors::Result,
-    mesh::{Index, Mesh, Vertex},
+    mesh::{Index, Vertex},
     mesh_storage::MeshId,
     present::{render_pass::RenderPass, swapchain::Swapchain},
     renderer_creator::RendererCreator,
-    utils::{cstr_to_str, str_to_cstr},
+    utils::{str_to_cstr},
 };
 use ash::{version::DeviceV1_0, vk};
-use parking_lot::Mutex;
 use std::{fs::File, slice::from_ref, sync::Arc};
 
 pub struct ForwardRenderer {
@@ -43,12 +42,12 @@ impl ForwardRenderer {
         let stage_vertex = vk::PipelineShaderStageCreateInfo::builder()
             .stage(vk::ShaderStageFlags::VERTEX)
             .module(vertex_module)
-            .name(str_to_cstr("main"));
+            .name(str_to_cstr("main\0"));
 
         let stage_fragment = vk::PipelineShaderStageCreateInfo::builder()
             .stage(vk::ShaderStageFlags::FRAGMENT)
             .module(fragment_module)
-            .name(str_to_cstr("main"));
+            .name(str_to_cstr("main\0"));
 
         let stages = [stage_vertex.build(), stage_fragment.build()];
 

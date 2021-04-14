@@ -11,29 +11,28 @@ use crate::{
     adapter::Adapter,
     command_recorder::QueueType,
     errors::Result,
-    mesh::{Mesh, MeshStandard, VertexPosUv},
+    mesh::{Mesh, VertexPosUv},
     mesh_storage::{MeshId, StandardMeshStorage},
     present::{render_pass::RenderPass, swapchain::Swapchain},
     renderers::{forward_renderer::ForwardRenderer, main_renderer::MainRenderer},
-    setup::{debug_utils::VtDebugUtils, renderer_creator_builder::RendererCreatorBuilder},
+    setup::{debug_utils::DebugUtils, renderer_creator_builder::RendererCreatorBuilder},
 };
-use ash::vk::Queue;
 use std::{fs::File, slice::from_ref};
 
 pub struct RendererCreator {
     pub(crate) entry: ash::Entry,
     pub(crate) instance: ash::Instance,
-    pub(crate) debug_utils: ManuallyDrop<Option<VtDebugUtils>>,
+    pub(crate) debug_utils: ManuallyDrop<Option<DebugUtils>>,
     pub(crate) adapter: Adapter,
-    pub(crate) device: Arc<ash::Device>,
+    pub device: Arc<ash::Device>,
 
-    pub(crate) swapchain: ManuallyDrop<Swapchain>,
-    pub(crate) swpachain_suboptimal: bool,
+    pub swapchain: ManuallyDrop<Swapchain>,
+    pub(crate) swapchain_suboptimal: bool,
     pub(crate) render_pass: ManuallyDrop<RenderPass>,
 
     pub(crate) vma: Arc<Mutex<vk_mem::Allocator>>,
-    pub(crate) command_pools: HashMap<QueueType, Arc<Mutex<(vk::Queue, vk::CommandPool)>>>,
-    pub(crate) mesh_storage: ManuallyDrop<StandardMeshStorage>,
+    pub command_pools: HashMap<QueueType, Arc<Mutex<(vk::Queue, vk::CommandPool)>>>,
+    pub mesh_storage: ManuallyDrop<StandardMeshStorage>,
 
     pub(crate) render_fence: vk::Fence,
     pub(crate) render_semaphore: vk::Semaphore,
@@ -87,7 +86,7 @@ impl RendererCreator {
 
     pub fn draw(&mut self, pipelines: &[ForwardRenderer]) -> Result<()> {
         // If swapchain suboptimal, recreate it
-        if self.swpachain_suboptimal {
+        if self.swapchain_suboptimal {
             let size = (self.swapchain.extent.width, self.swapchain.extent.height);
             self.resize(size)?;
         }
@@ -99,8 +98,9 @@ impl RendererCreator {
             self.device.reset_fences(from_ref(&self.render_fence))?;
         }
 
+        // Acquire next image
         let (swapchain_image_index, is_suboptimal) = self.swapchain.acquire_next_image()?;
-        self.swpachain_suboptimal = is_suboptimal;
+        self.swapchain_suboptimal = is_suboptimal;
 
         let mut main_renderer = None;
         {
@@ -143,7 +143,7 @@ impl RendererCreator {
                     .swapchain
                     .loader
                     .queue_present(graphics_queue.0, &present_info)?;
-                self.swpachain_suboptimal = is_suboptimal;
+                self.swapchain_suboptimal = is_suboptimal;
             }
         }
 

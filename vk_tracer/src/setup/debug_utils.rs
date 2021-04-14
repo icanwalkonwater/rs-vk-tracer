@@ -3,12 +3,12 @@ use ash::{extensions::ext, vk};
 use log::{info, log, Level};
 use std::{borrow::Cow, ffi::CStr};
 
-pub(crate) struct VtDebugUtils {
+pub(crate) struct DebugUtils {
     pub(crate) loader: ext::DebugUtils,
     messenger: vk::DebugUtilsMessengerEXT,
 }
 
-impl VtDebugUtils {
+impl DebugUtils {
     pub(crate) fn new(entry: &ash::Entry, instance: &ash::Instance) -> Result<Self> {
         let loader = ext::DebugUtils::new(entry, instance);
         let messenger = unsafe {
@@ -27,7 +27,7 @@ impl VtDebugUtils {
     }
 }
 
-impl Drop for VtDebugUtils {
+impl Drop for DebugUtils {
     fn drop(&mut self) {
         unsafe {
             self.loader

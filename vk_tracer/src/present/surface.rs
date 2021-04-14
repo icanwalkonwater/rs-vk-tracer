@@ -4,7 +4,6 @@ use raw_window_handle::HasRawWindowHandle;
 use crate::{
     adapter::{Adapter, AdapterRequirements},
     errors::Result,
-    utils::clamp,
 };
 
 /// Choose the surface format.
@@ -95,8 +94,8 @@ impl Surface {
             .unwrap()
             .max_image_extent;
 
-        let corrected_width = clamp(self.extent.width, min_extent.width, max_extent.width);
-        let corrected_height = clamp(self.extent.height, min_extent.height, max_extent.height);
+        let corrected_width = self.extent.width.clamp(min_extent.width, max_extent.width);
+        let corrected_height = self.extent.height.clamp(min_extent.height, max_extent.height);
 
         self.extent = vk::Extent2D::builder()
             .width(corrected_width)

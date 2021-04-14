@@ -29,5 +29,7 @@ pub fn required_instance_extensions_with_surface(
 }
 
 pub fn required_device_extensions() -> Vec<&'static CStr> {
-    vec![ash::extensions::khr::Swapchain::name()]
+    use ash::extensions::khr;
+    // VK_KHR_create_renderpass2 promoted to vulkan 1.2
+    vec![khr::Swapchain::name()]
 }

@@ -14,6 +14,7 @@ use winit::{
     platform::run_return::EventLoopExtRunReturn,
     window::WindowBuilder,
 };
+use vk_tracer::dump_vma_stats;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -108,19 +109,34 @@ fn main() -> anyhow::Result<()> {
         File::open("vk_tracer/examples/shaders/simple.frag.spv").unwrap(),
     )?;
 
-    let start = Instant::now();
+    dump_vma_stats(&renderer_creator);
+
     let mut last_fps_check = Instant::now();
     let mut frames = 0.0;
 
+    let mut last_frame_start = Instant::now();
+    // 60 fps target
+    let min_frame_interval = Duration::from_millis(1000 / 60);
+
     event_loop.run_return(move |event, _, control_flow| {
         // Run as fast a we can
-        //*control_flow = ControlFlow::Poll;
-        *control_flow =
-            ControlFlow::WaitUntil(Instant::now().add(Duration::from_millis(1000 / 60)));
+        *control_flow = ControlFlow::Poll;
 
-        if last_fps_check.elapsed().as_millis() >= 1000 {
-            last_fps_check = Instant::now();
-            info!("FPS: {}", frames / start.elapsed().as_secs_f64());
+        // Draw frame if it is time
+        if last_frame_start.elapsed() >= min_frame_interval {
+            last_frame_start = Instant::now();
+            frames += 1.0;
+            renderer_creator.draw(from_ref(&forward_renderer)).unwrap();
+        }
+
+        // Print FPS every second
+        {
+            let fps_frame_duration = last_fps_check.elapsed().as_secs_f32();
+            if fps_frame_duration >= 1.0 {
+                info!("FPS: {}", frames / fps_frame_duration);
+                last_fps_check = Instant::now();
+                frames = 0.0;
+            }
         }
 
         match event {
@@ -145,11 +161,6 @@ fn main() -> anyhow::Result<()> {
                 event: WindowEvent::Resized(size),
                 ..
             } => renderer_creator.resize(size.into()).unwrap(),
-            Event::RedrawRequested(_) => {
-                frames += 1.0;
-                renderer_creator.draw(from_ref(&forward_renderer)).unwrap();
-                window.request_redraw();
-            }
             _ => (),
         }
     });

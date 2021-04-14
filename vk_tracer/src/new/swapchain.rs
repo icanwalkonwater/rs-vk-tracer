@@ -1,13 +1,17 @@
-use std::sync::Arc;
+use crate::new::{VkTracerApp, SwapchainHandle};
+use ash::vk;
+use crate::adapter::{AdapterRequirements, Adapter};
+use crate::present::surface::Surface;
+use crate::new::errors::{Result, VkTracerError};
+use ash::version::DeviceV1_0;
 
-use ash::{version::DeviceV1_0, vk};
-
-use crate::{
-    adapter::{Adapter, AdapterRequirements},
-    errors::Result,
-    present::surface::Surface,
-    renderer_creator::RendererCreator,
-};
+impl VkTracerApp {
+    pub fn create_swapchain_for_window(&mut self, window_size: (u32, u32)) -> Result<SwapchainHandle> {
+        let surface = self.surface.as_ref().ok_or(VkTracerError::NoSurfaceAvailable)?;
+        let swapchain = Swapchain::new(&self.instance, surface, &self.adapter, &self.device, window_size)?;
+        Ok(self.swapchain_storage.insert(swapchain))
+    }
+}
 
 /// Choose the present mode, will fallback to FIFO if the requirements can't be met.
 pub(crate) fn choose_swapchain_present_mode(
@@ -23,25 +27,21 @@ pub(crate) fn choose_swapchain_present_mode(
     vk::PresentModeKHR::FIFO
 }
 
-pub struct Swapchain {
-    device: Arc<ash::Device>,
+pub(crate) struct Swapchain {
     pub(crate) loader: ash::extensions::khr::Swapchain,
-    create_info: vk::SwapchainCreateInfoKHR,
-    pub(crate) surface: Surface,
+    pub(crate) create_info: vk::SwapchainCreateInfoKHR,
     pub(crate) handle: vk::SwapchainKHR,
     pub(crate) images: Vec<vk::Image>,
     pub(crate) image_views: Vec<vk::ImageView>,
     pub(crate) extent: vk::Extent2D,
-
-    pub(crate) present_semaphore: vk::Semaphore,
 }
 
 impl Swapchain {
     pub(crate) fn new(
         instance: &ash::Instance,
-        surface: Surface,
+        surface: &Surface,
         adapter: &Adapter,
-        device: &Arc<ash::Device>,
+        device: &ash::Device,
         window_size: (u32, u32),
     ) -> Result<Self> {
         let capabilities = adapter
@@ -50,7 +50,7 @@ impl Swapchain {
             .surface_capabilities
             .as_ref()
             .unwrap();
-        let loader = ash::extensions::khr::Swapchain::new(instance, device.as_ref());
+        let loader = ash::extensions::khr::Swapchain::new(instance, device);
 
         let mut image_count = capabilities.min_image_count + 1;
         if capabilities.max_image_count > 0 && image_count > capabilities.max_image_count {
@@ -86,29 +86,23 @@ impl Swapchain {
         let swapchain = unsafe { loader.create_swapchain(&create_info, None)? };
 
         let images = unsafe { loader.get_swapchain_images(swapchain)? };
-        let image_views = Self::create_image_views(device, &loader, &surface, &images)?;
-
-        let present_semaphore =
-            unsafe { device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None)? };
+        let image_views = Self::create_image_views(device, &surface, &images)?;
 
         Ok(Self {
-            device: Arc::clone(device),
             loader,
             create_info: create_info.build(),
-            surface,
             handle: swapchain,
             images,
             image_views,
             extent,
-            present_semaphore,
         })
     }
 
-    pub(crate) fn recreate(&mut self, adapter: &Adapter, window_size: (u32, u32)) -> Result<()> {
+    pub(crate) fn recreate(&mut self, device: &ash::Device, adapter: &Adapter, surface: &Surface, window_size: (u32, u32)) -> Result<()> {
         unsafe {
             // Destroy previous swapchain images
             for image_view in self.image_views.iter().copied() {
-                self.device.destroy_image_view(image_view, None);
+                device.destroy_image_view(image_view, None);
             }
         }
 
@@ -128,9 +122,8 @@ impl Swapchain {
 
         self.images = unsafe { self.loader.get_swapchain_images(self.handle)? };
         self.image_views = Self::create_image_views(
-            self.device.as_ref(),
-            &self.loader,
-            &self.surface,
+            device,
+            surface,
             &self.images,
         )?;
 
@@ -141,8 +134,8 @@ impl Swapchain {
         unsafe {
             Ok(self.loader.acquire_next_image(
                 self.handle,
-                std::u64::MAX,
-                self.present_semaphore,
+                u64::MAX,
+                vk::Semaphore::null(),
                 vk::Fence::null(),
             )?)
         }
@@ -153,13 +146,11 @@ impl Swapchain {
         capabilities: &vk::SurfaceCapabilitiesKHR,
     ) -> vk::Extent2D {
         vk::Extent2D::builder()
-            .width(u32::clamp(
-                window_size.0,
+            .width(window_size.0.clamp(
                 capabilities.min_image_extent.width,
-                capabilities.max_image_extent.width,
+                capabilities.max_image_extent.width
             ))
-            .height(u32::clamp(
-                window_size.1,
+            .height(window_size.1.clamp(
                 capabilities.min_image_extent.height,
                 capabilities.max_image_extent.height,
             ))
@@ -168,7 +159,6 @@ impl Swapchain {
 
     fn create_image_views(
         device: &ash::Device,
-        loader: &ash::extensions::khr::Swapchain,
         surface: &Surface,
         images: &[vk::Image],
     ) -> Result<Vec<vk::ImageView>> {
@@ -207,15 +197,12 @@ impl Swapchain {
 
 impl Drop for Swapchain {
     fn drop(&mut self) {
-        unsafe {
-            self.device.destroy_semaphore(self.present_semaphore, None);
-
+        /*unsafe {
             for image_view in self.image_views.iter().copied() {
                 self.device.destroy_image_view(image_view, None);
             }
 
             self.loader.destroy_swapchain(self.handle, None);
-            // Surface will be dropped just after
-        }
+        }*/
     }
 }

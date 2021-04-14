@@ -5,9 +5,9 @@ new_key_type! {
     pub struct MeshId;
 }
 
-pub(crate) type StandardMeshStorage = MeshStorage<VertexPosUv, u16>;
+pub type StandardMeshStorage = MeshStorage<VertexPosUv, u16>;
 
-pub(crate) struct MeshStorage<V: Vertex, I: Index> {
+pub struct MeshStorage<V: Vertex, I: Index> {
     storage: SlotMap<MeshId, Mesh<V, I>>,
 }
 

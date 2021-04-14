@@ -12,10 +12,6 @@ pub(crate) fn cstr_to_str<'a>(ptr: *const std::os::raw::c_char) -> Cow<'a, str> 
     unsafe { CStr::from_ptr(ptr).to_string_lossy() }
 }
 
-pub fn clamp(value: u32, min: u32, max: u32) -> u32 {
-    value.min(max).max(min)
-}
-
 pub fn dump_vma_stats(creator: &RendererCreator) {
     let stats = creator.vma.lock().build_stats_string(true).unwrap();
     {

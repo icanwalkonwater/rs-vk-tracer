@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap, ffi::CStr, mem::ManuallyDrop, ops::Deref, os::raw::c_char, sync::Arc,
+    collections::HashMap, ffi::CStr, mem::ManuallyDrop, os::raw::c_char, sync::Arc,
 };
 
 use ash::{
@@ -17,8 +17,8 @@ use crate::{
     present::{render_pass::RenderPass, surface::Surface, swapchain::Swapchain},
     renderer_creator::RendererCreator,
     setup::{
-        debug_utils::VtDebugUtils,
-        extensions::{required_instance_extensions, required_instance_extensions_with_surface},
+        debug_utils::DebugUtils,
+        extensions::{required_instance_extensions_with_surface},
         physical_device_selection::pick_adapter,
         queue_indices::QueueFamilyIndices,
     },
@@ -147,7 +147,7 @@ impl RendererCreatorBuilder {
         // </editor-fold>
 
         let debug_utils = if self.install_debug_utils {
-            Some(VtDebugUtils::new(&entry, &instance)?)
+            Some(DebugUtils::new(&entry, &instance)?)
         } else {
             None
         };
@@ -326,7 +326,7 @@ impl RendererCreatorBuilder {
             adapter,
             device,
             swapchain: ManuallyDrop::new(swapchain),
-            swpachain_suboptimal: false,
+            swapchain_suboptimal: false,
             render_pass: ManuallyDrop::new(render_pass),
             vma: Arc::new(Mutex::new(vma)),
             command_pools,

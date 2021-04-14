@@ -6,7 +6,6 @@ use ash::{version::DeviceV1_0, vk};
 use std::{
     slice::from_ref,
     sync::Arc,
-    time::{Duration, Instant, SystemTime},
 };
 
 pub struct MainRenderer {
