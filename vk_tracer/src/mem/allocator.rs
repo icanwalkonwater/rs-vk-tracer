@@ -1,4 +1,4 @@
-use crate::new::errors::Result;
+use crate::errors::Result;
 use ash::{version::DeviceV1_0, vk};
 use std::slice::from_ref;
 

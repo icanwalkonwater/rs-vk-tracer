@@ -1,23 +1,27 @@
-use crate::{
-    new::adapter::{Adapter, AdapterRequirements},
-    command_recorder::QueueType,
-    new::{errors::Result, surface::Surface, VkTracerApp, VULKAN_VERSION, physical_device_selection::pick_adapter, queue_indices::QueueFamilyIndices},
-    setup::{
-        debug_utils::DebugUtils,
-        extensions::{required_instance_extensions, required_instance_extensions_with_surface},
-    },
-    utils::str_to_cstr,
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    ffi::{CStr, CString},
 };
+
 use ash::{
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk,
 };
 use raw_window_handle::HasRawWindowHandle;
 use slotmap::SlotMap;
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet},
-    ffi::{CStr, CString},
+
+use crate::{
+    command_recorder::QueueType,
+    errors::Result,
+    present::Surface,
+    setup::{
+        debug_utils::DebugUtils,
+        extensions::{required_instance_extensions, required_instance_extensions_with_surface},
+        pick_adapter, Adapter, AdapterRequirements, QueueFamilyIndices,
+    },
+    utils::str_to_cstr,
+    VkTracerApp, VULKAN_VERSION,
 };
 
 // TODO: Remove unwrap

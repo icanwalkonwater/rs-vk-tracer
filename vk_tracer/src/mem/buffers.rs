@@ -1,4 +1,4 @@
-use crate::new::{errors::Result, mem::allocator::RawBufferAllocation};
+use crate::{errors::Result, mem::RawBufferAllocation};
 use ash::vk;
 
 pub struct TypedBuffer<D: Copy>(RawBufferAllocation, std::marker::PhantomData<D>);

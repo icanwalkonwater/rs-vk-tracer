@@ -1,19 +1,17 @@
-use crate::{
-    new::{
-        errors::{HandleType, Result, VkTracerError},
-        mesh::Mesh,
-        render::VkRecordable,
-        render_plan::RenderPlan,
-        ForwardPipelineHandle, MeshHandle, RenderPlanHandle, VkTracerApp,
-    },
-    utils::str_to_cstr,
-};
-use ash::{version::DeviceV1_0, vk, vk::CommandBuffer};
 use std::{
     io::{Read, Seek},
     slice::from_ref,
 };
-use log::debug;
+
+use ash::{version::DeviceV1_0, vk, vk::CommandBuffer};
+
+use crate::{
+    errors::{HandleType, Result, VkTracerError},
+    mesh::Mesh,
+    render::{RenderPlan, VkRecordable},
+    utils::str_to_cstr,
+    ForwardPipelineHandle, MeshHandle, RenderPlanHandle, VkTracerApp,
+};
 
 impl VkTracerApp {
     pub fn create_forward_pipeline(
@@ -113,7 +111,9 @@ impl ForwardPipeline {
             .blend_enable(false);
 
         // Dynamic state
-        let viewport_state_info = vk::PipelineViewportStateCreateInfo::default();
+        let viewport_state_info = vk::PipelineViewportStateCreateInfo::builder()
+            .viewport_count(1)
+            .scissor_count(1);
 
         // TODO: attachments
         let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
@@ -153,6 +153,11 @@ impl ForwardPipeline {
             pipelines[0]
         };
 
+        unsafe {
+            device.destroy_shader_module(vertex_module, None);
+            device.destroy_shader_module(fragment_module, None);
+        }
+
         Ok(Self {
             pipeline,
             pipeline_layout,
@@ -162,7 +167,12 @@ impl ForwardPipeline {
 }
 
 impl VkRecordable for ForwardPipeline {
-    unsafe fn record_commands(&self, app: &VkTracerApp, commands: CommandBuffer) -> Result<()> {
+    unsafe fn record_commands(
+        &self,
+        app: &VkTracerApp,
+        viewport: vk::Extent2D,
+        commands: CommandBuffer,
+    ) -> Result<()> {
         let mesh = app
             .mesh_storage
             .get(self.mesh)
@@ -184,6 +194,30 @@ impl VkRecordable for ForwardPipeline {
 
         app.device
             .cmd_bind_pipeline(commands, vk::PipelineBindPoint::GRAPHICS, self.pipeline);
+
+        app.device.cmd_set_viewport(
+            commands,
+            0,
+            from_ref(
+                &vk::Viewport::builder()
+                    .height(viewport.height as f32)
+                    .width(viewport.width as f32)
+                    .x(0.0)
+                    .y(0.0)
+                    .min_depth(0.0)
+                    .max_depth(1.0),
+            ),
+        );
+
+        app.device.cmd_set_scissor(
+            commands,
+            0,
+            from_ref(
+                &vk::Rect2D::builder()
+                    .extent(viewport)
+                    .offset(vk::Offset2D::default()),
+            ),
+        );
 
         app.device
             .cmd_draw_indexed(commands, mesh.indices_len, 1, 0, 0, 1);

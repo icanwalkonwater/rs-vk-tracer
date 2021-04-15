@@ -1,12 +1,20 @@
-use crate::new::{errors::Result, ForwardPipelineHandle, VkTracerApp, RendererHandle, SwapchainHandle};
-use ash::vk;
-use ash::version::DeviceV1_0;
+use crate::{
+    command_recorder::QueueType,
+    errors::{HandleType, Result, VkTracerError},
+    ForwardPipelineHandle, RendererHandle, SwapchainHandle, VkTracerApp,
+};
+use ash::{version::DeviceV1_0, vk};
 use std::slice::from_ref;
-use crate::new::errors::{VkTracerError, HandleType};
-use crate::command_recorder::QueueType;
 
-pub(crate) mod forward;
-pub(crate) mod renderer;
+mod forward;
+mod render_plan;
+mod render_target;
+mod renderer;
+
+pub(crate) use forward::*;
+pub use render_plan::*;
+pub(crate) use render_target::*;
+pub use renderer::*;
 
 #[derive(Copy, Clone)]
 pub enum RenderablePipelineHandle {
@@ -21,20 +29,40 @@ impl Into<RenderablePipelineHandle> for ForwardPipelineHandle {
 
 trait VkRecordable {
     /// Only record bind and draw commands, no begin or end !
-    unsafe fn record_commands(&self, app: &VkTracerApp, commands: vk::CommandBuffer) -> Result<()>;
+    unsafe fn record_commands(
+        &self,
+        app: &VkTracerApp,
+        viewport: vk::Extent2D,
+        commands: vk::CommandBuffer,
+    ) -> Result<()>;
 }
 
 impl VkTracerApp {
-    pub fn render_and_present(&mut self, renderer: RendererHandle, swapchain: SwapchainHandle, render_target_index: u32) -> Result<()> {
-        let renderer = self.renderer_storage.get(renderer).ok_or(VkTracerError::InvalidHandle(HandleType::Renderer))?;
-        let swapchain = self.swapchain_storage.get(swapchain).ok_or(VkTracerError::InvalidHandle(HandleType::Swapchain))?;
+    pub fn render_and_present(
+        &mut self,
+        renderer: RendererHandle,
+        swapchain: SwapchainHandle,
+        render_target_index: u32,
+    ) -> Result<()> {
+        let renderer = self
+            .renderer_storage
+            .get(renderer)
+            .ok_or(VkTracerError::InvalidHandle(HandleType::Renderer))?;
+        let swapchain = self
+            .swapchain_storage
+            .get(swapchain)
+            .ok_or(VkTracerError::InvalidHandle(HandleType::Swapchain))?;
 
-        let render_semaphore = unsafe { self.device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None)? };
+        let render_semaphore = unsafe {
+            self.device
+                .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?
+        };
 
         // Reset render fence
         unsafe {
             // Should return immediately but its a precaution
-            self.device.wait_for_fences(from_ref(&renderer.render_fence), true, u64::MAX)?;
+            self.device
+                .wait_for_fences(from_ref(&renderer.render_fence), true, u64::MAX)?;
             self.device.reset_fences(from_ref(&renderer.render_fence))?;
         }
 
@@ -58,12 +86,15 @@ impl VkTracerApp {
                 renderer.render_fence,
             )?;
 
-            let is_suboptimal = swapchain.loader.queue_present(graphics_queue, &present_info)?;
+            let is_suboptimal = swapchain
+                .loader
+                .queue_present(graphics_queue, &present_info)?;
         }
 
         unsafe {
             // Wait for the end of the render
-            self.device.wait_for_fences(from_ref(&renderer.render_fence), true, u64::MAX)?;
+            self.device
+                .wait_for_fences(from_ref(&renderer.render_fence), true, u64::MAX)?;
 
             // Now we can free the semaphore
             self.device.destroy_semaphore(render_semaphore, None);

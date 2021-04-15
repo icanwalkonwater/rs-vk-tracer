@@ -1,10 +1,8 @@
 use crate::{
     command_recorder::QueueType,
-    new::{
-        errors::{HandleType, Result, VkTracerError},
-        render::{RenderablePipelineHandle, VkRecordable},
-        RenderPlanHandle, RenderTargetHandle, RendererHandle, VkTracerApp,
-    },
+    errors::{HandleType, Result, VkTracerError},
+    render::{RenderablePipelineHandle, VkRecordable},
+    RenderPlanHandle, RenderTargetHandle, RendererHandle, VkTracerApp,
 };
 use ash::{
     version::{DeviceV1_0, DeviceV1_2},
@@ -123,7 +121,11 @@ impl RendererBuilder<'_> {
                                     self.app.forward_pipeline_storage.get(handle).ok_or(
                                         VkTracerError::InvalidHandle(HandleType::ForwardPipeline),
                                     )?;
-                                pipeline.record_commands(self.app, commands)?;
+                                pipeline.record_commands(
+                                    self.app,
+                                    render_target.extent,
+                                    commands,
+                                )?;
                             }
                         }
 
@@ -150,6 +152,7 @@ impl RendererBuilder<'_> {
             let clear_values = std::iter::repeat(self.clear_color)
                 .take(render_plan.attachments.len())
                 .collect::<Vec<_>>();
+
             device.cmd_begin_render_pass2(
                 top_level_commands,
                 &vk::RenderPassBeginInfo::builder()
@@ -189,8 +192,16 @@ impl RendererBuilder<'_> {
         };
 
         // Create the fence already signaled because otherwise we will block infinitely when rendering for the first time
-        let render_fence = unsafe { device.create_fence(&vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED), None)? };
+        let render_fence = unsafe {
+            device.create_fence(
+                &vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED),
+                None,
+            )?
+        };
 
-        Ok(self.app.renderer_storage.insert(Renderer { commands, render_fence }))
+        Ok(self.app.renderer_storage.insert(Renderer {
+            commands,
+            render_fence,
+        }))
     }
 }

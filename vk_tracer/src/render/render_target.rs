@@ -1,6 +1,6 @@
-use crate::new::{
+use crate::{
     errors::{HandleType, Result, VkTracerError},
-    mem::image::ImageViewFatHandle,
+    mem::ImageViewFatHandle,
     RenderPlanHandle, RenderTargetHandle, VkTracerApp,
 };
 use ash::{version::DeviceV1_0, vk};
@@ -18,9 +18,7 @@ impl VkTracerApp {
             .ok_or(VkTracerError::InvalidHandle(HandleType::RenderPlan))?;
         debug_assert_eq!(render_plan.attachments.len(), attachments.len());
 
-        let attachments_view = attachments.iter()
-            .map(|a| a.view)
-            .collect::<Vec<_>>();
+        let attachments_view = attachments.iter().map(|a| a.view).collect::<Vec<_>>();
 
         let framebuffer = unsafe {
             self.device.create_framebuffer(

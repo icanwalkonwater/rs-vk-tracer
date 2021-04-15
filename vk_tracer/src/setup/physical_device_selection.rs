@@ -7,9 +7,9 @@ use ash::{version::InstanceV1_0, vk};
 use log::{debug, error, info};
 
 use crate::{
-    adapter::AdapterRequirements,
-    errors::{Result, VtError},
-    present::surface::choose_surface_format,
+    errors::{Result, VkTracerError},
+    present::choose_surface_format,
+    setup::AdapterRequirements,
     utils::cstr_to_str,
     VULKAN_VERSION, VULKAN_VERSION_STR,
 };
@@ -130,7 +130,7 @@ pub fn pick_adapter(
         )
     }
 
-    best_device.ok_or(VtError::NoSuitableAdapterError)
+    best_device.ok_or(VkTracerError::NoSuitableAdapterError)
 }
 
 fn process_physical_device(

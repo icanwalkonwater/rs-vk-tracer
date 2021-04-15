@@ -1,4 +1,4 @@
-use crate::new::{
+use crate::{
     errors::{HandleType, Result, VkTracerError},
     SwapchainHandle, VkTracerApp,
 };

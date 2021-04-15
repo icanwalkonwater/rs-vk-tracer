@@ -2,8 +2,8 @@ use ash::vk;
 use raw_window_handle::HasRawWindowHandle;
 
 use crate::{
-    adapter::{Adapter, AdapterRequirements},
     errors::Result,
+    setup::{Adapter, AdapterRequirements},
 };
 
 /// Choose the surface format.
@@ -104,13 +104,5 @@ impl Surface {
             .width(corrected_width)
             .height(corrected_height)
             .build();
-    }
-}
-
-impl Drop for Surface {
-    fn drop(&mut self) {
-        unsafe {
-            self.loader.destroy_surface(self.handle, None);
-        }
     }
 }

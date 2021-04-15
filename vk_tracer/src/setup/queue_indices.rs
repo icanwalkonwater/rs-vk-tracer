@@ -1,4 +1,4 @@
-use crate::setup::physical_device_selection::AdapterInfo;
+use crate::setup::AdapterInfo;
 use ash::vk;
 
 const QUEUE_PRIORITIES_ONE: [f32; 1] = [1.0];

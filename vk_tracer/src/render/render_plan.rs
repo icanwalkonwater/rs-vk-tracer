@@ -1,20 +1,13 @@
-use crate::new::{errors::Result, mem::image::ImageViewFatHandle, RenderPlanHandle, VkTracerApp};
+use crate::{errors::Result, mem::ImageViewFatHandle, RenderPlanHandle, VkTracerApp};
 use ash::{version::DeviceV1_2, vk};
 
 impl VkTracerApp {
-    pub fn new_render_plan(
-        &mut self,
-        dependency: Option<vk::SubpassDependency2>,
-    ) -> RenderPlanBuilder {
+    pub fn new_render_plan(&mut self) -> RenderPlanBuilder {
         RenderPlanBuilder {
             app: self,
             attachments: Vec::new(),
             references: Vec::new(),
-            dependencies: if let Some(dependency) = dependency {
-                vec![dependency]
-            } else {
-                Vec::new()
-            },
+            dependencies: Vec::new(),
             subpasses: Vec::new(),
         }
     }
