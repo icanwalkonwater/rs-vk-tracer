@@ -1,11 +1,6 @@
-use log::info;
-use std::{
-    fs::File,
-    time::{Duration, Instant},
-};
 use vk_tracer::{
     prelude::*,
-    shaderc::ShaderKind,
+    shaderc::{OptimizationLevel, ShaderKind},
     utils::{FpsLimiter, ShaderCompiler},
 };
 use winit::{
@@ -17,35 +12,43 @@ use winit::{
 fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    {
+    // Compile shaders
+    let (vertex_shader, fragment_shader) = {
         let mut compiler = ShaderCompiler::new()?;
-        compiler.compile(
-            "vk_tracer/examples/shaders/simple.vert".into(),
-            ShaderKind::Vertex,
-            "main",
-        )?;
-        compiler.compile(
-            "vk_tracer/examples/shaders/simple.frag".into(),
-            ShaderKind::Fragment,
-            "main",
-        )?;
-    }
+        compiler.set_optimization_level(OptimizationLevel::Performance);
 
+        (
+            compiler.compile_and_return_file(
+                "vk_tracer/examples/shaders/triangle.vert.glsl".into(),
+                ShaderKind::Vertex,
+                "main",
+            )?,
+            compiler.compile_and_return_file(
+                "vk_tracer/examples/shaders/triangle.frag.glsl".into(),
+                ShaderKind::Fragment,
+                "main",
+            )?,
+        )
+    };
+
+    // Create window
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_title("API Mockup")
         .with_resizable(true)
         .build(&event_loop)?;
 
+    // Create app
     let mut graphics = VkTracerApp::builder()
         .pick_best_physical_device()
         .with_app_info("API Mockup".into(), (1, 0, 0))
         .with_debug_utils()
-        .with_extensions(&[VkTracerExtensions::PipelineRaytracing])
         .build(Some((&window, window.inner_size().into())))?;
 
+    // Create a swapchain
     let my_swapchain_handle = graphics.create_swapchain_with_surface()?;
 
+    // Create a mesh (the triangle)
     let my_mesh_handle = graphics.create_mesh_indexed(
         &[
             VertexXyzUv {
@@ -67,6 +70,7 @@ fn main() -> anyhow::Result<()> {
     // Create a color attachment for each image in the swapchain
     let my_swapchain_images_ref = graphics.get_images_from_swapchain(my_swapchain_handle)?;
 
+    // Create a render plan (vulkan render pass), listing the attachments and subpasses of the render
     let my_render_plan_handle = graphics
         .new_render_plan()
         .add_subpass(
@@ -85,6 +89,7 @@ fn main() -> anyhow::Result<()> {
         .add_color_attachment_present(my_swapchain_images_ref[0])?
         .build()?;
 
+    // Allocate one render target (vulkan framebuffer) per swapchain image
     let mut my_render_targets_handles = Vec::with_capacity(my_swapchain_images_ref.len());
     for my_color_attachment_handle in my_swapchain_images_ref {
         my_render_targets_handles.push(
@@ -93,14 +98,16 @@ fn main() -> anyhow::Result<()> {
         );
     }
 
+    // Create a (forward) pipeline for our triangle
     let my_mesh_pipeline_handle = graphics.create_forward_pipeline(
         my_render_plan_handle,
         0,
-        File::open("vk_tracer/examples/shaders/simple.vert.spv")?,
-        File::open("vk_tracer/examples/shaders/simple.frag.spv")?,
+        vertex_shader,
+        fragment_shader,
         my_mesh_handle,
     )?;
 
+    // Create a renderer for each render target
     let mut my_renderer_handles = Vec::with_capacity(my_render_targets_handles.len());
     for my_render_target_handle in my_render_targets_handles {
         my_renderer_handles.push(
@@ -111,20 +118,23 @@ fn main() -> anyhow::Result<()> {
         );
     }
 
+    // Limit fps to 60 for convenience
     let mut fps_limiter = FpsLimiter::new(60.0);
 
     event_loop.run(move |event, _, control| {
         // Run as fast as possible
         *control = ControlFlow::Poll;
 
-        // Draw frame if it is time
+        // Don't draw more that 60fps
         if fps_limiter.should_render() {
             fps_limiter.new_frame();
 
+            // Acquire the next render target to draw to
             let (render_target_index, is_suboptimal) = graphics
                 .get_next_swapchain_render_target_index(my_swapchain_handle)
                 .unwrap();
 
+            // And draw then present through the swapchain
             graphics
                 .render_and_present(
                     my_renderer_handles[render_target_index as usize],

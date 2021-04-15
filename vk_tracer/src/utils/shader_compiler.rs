@@ -1,37 +1,51 @@
-use crate::errors::{Result, VkTracerError};
-use log::info;
+use crate::{
+    errors::{Result, VkTracerError},
+    shaderc::Compiler,
+};
+use log::{info, warn};
+use shaderc::{CompileOptions, EnvVersion, OptimizationLevel, TargetEnv};
 use std::{
-    fs::File,
+    fs::{File, OpenOptions},
     io::{Read, Write},
     path::PathBuf,
 };
 
 pub struct ShaderCompiler<'a> {
-    compiler: shaderc::Compiler,
-    options: Option<shaderc::CompileOptions<'a>>,
+    compiler: Compiler,
+    options: CompileOptions<'a>,
 }
 
 impl<'a> ShaderCompiler<'a> {
+    #[inline]
     pub fn new() -> Result<Self> {
-        Ok(Self {
-            compiler: shaderc::Compiler::new().ok_or(VkTracerError::ShaderCompilerError(
-                "Can't create shaderc compiler !",
-            ))?,
-            options: None,
-        })
+        let compiler = Compiler::new().ok_or(VkTracerError::ShaderCompilerError(
+            "Can't create shaderc compiler !",
+        ))?;
+        let mut options = CompileOptions::new().ok_or(VkTracerError::ShaderCompilerError(
+            "Failed to create compile options !",
+        ))?;
+        options.set_target_env(TargetEnv::Vulkan, EnvVersion::Vulkan1_2 as _);
+
+        Ok(Self { compiler, options })
     }
 
-    pub fn set_options(mut self, options: shaderc::CompileOptions<'a>) -> ShaderCompiler<'a> {
-        self.options = Some(options);
-        self
+    #[inline(always)]
+    pub fn set_optimization_level(&mut self, level: OptimizationLevel) {
+        self.options.set_optimization_level(level);
     }
 
-    pub fn compile(
+    #[inline]
+    pub fn edit_options(&mut self, edit: impl FnOnce(&mut CompileOptions)) {
+        edit(&mut self.options);
+    }
+
+    #[inline]
+    pub fn compile_and_return_file(
         &mut self,
         filename: PathBuf,
         kind: shaderc::ShaderKind,
         entry_point: &str,
-    ) -> Result<()> {
+    ) -> Result<File> {
         let src = {
             let mut src = String::new();
             File::open(&filename)?.read_to_string(&mut src)?;
@@ -43,16 +57,42 @@ impl<'a> ShaderCompiler<'a> {
             kind,
             filename.file_name().unwrap().to_str().unwrap(),
             entry_point,
-            self.options.as_ref(),
+            Some(&self.options),
         )?;
 
-        File::create(format!("{}.spv", filename.display()))?.write_all(compiled.as_binary_u8())?;
-
         info!(
-            "Compiled {} ({:?} shader)",
+            "Compiled {} as {:?} shader with {} warnings",
             filename.file_name().unwrap().to_str().unwrap(),
-            kind
+            kind,
+            compiled.get_num_warnings(),
         );
-        Ok(())
+
+        if compiled.get_num_warnings() > 0 {
+            warn!("{}", compiled.get_warning_messages());
+        }
+
+        let mut dst = filename.clone();
+        dst.set_extension("spv");
+
+        let mut dst = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(dst)?;
+
+        dst.write_all(compiled.as_binary_u8())?;
+
+        Ok(dst)
+    }
+
+    #[inline(always)]
+    pub fn compile(
+        &mut self,
+        filename: PathBuf,
+        kind: shaderc::ShaderKind,
+        entry_point: &str,
+    ) -> Result<()> {
+        self.compile_and_return_file(filename, kind, entry_point)
+            .map(|_| ())
     }
 }

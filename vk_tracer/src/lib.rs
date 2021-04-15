@@ -40,17 +40,17 @@ pub mod errors {
         #[error("Shader compiler error: {0}")]
         ShaderCompilerError(&'static str),
         #[cfg(feature = "with_shaderc")]
-        #[error("Shaderc error")]
+        #[error("Shaderc error: {0}")]
         ShaderCError(#[from] shaderc::Error),
-        #[error("Vulkan error")]
+        #[error("Vulkan error: {0}")]
         Vulkan(#[from] ash::vk::Result),
-        #[error("Loading error")]
+        #[error("Loading error: {0}")]
         LoadingError(#[from] ash::LoadingError),
-        #[error("Instance error")]
+        #[error("Instance error: {0}")]
         InstanceError(#[from] ash::InstanceError),
-        #[error("VMA Error")]
+        #[error("VMA Error: {0}")]
         VmaError(#[from] vk_mem::Error),
-        #[error("IO Error")]
+        #[error("IO Error: {0}")]
         IoError(#[from] std::io::Error),
         #[error("No surface available")]
         NoSurfaceAvailable,
