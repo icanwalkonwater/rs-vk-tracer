@@ -5,6 +5,7 @@ use crate::{
     errors::Result,
     setup::{Adapter, AdapterRequirements},
 };
+use ash::extensions::khr;
 
 /// Choose the surface format.
 pub(crate) fn choose_surface_format(
@@ -45,7 +46,7 @@ impl Surface {
         window: &impl HasRawWindowHandle,
         window_size: (u32, u32),
     ) -> Result<Self> {
-        let loader = ash::extensions::khr::Surface::new(entry, instance);
+        let loader = khr::Surface::new(entry, instance);
         let handle = unsafe { ash_window::create_surface(entry, instance, window, None)? };
 
         Ok(Self {

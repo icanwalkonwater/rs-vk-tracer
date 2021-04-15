@@ -8,10 +8,7 @@ use crate::{
 };
 
 impl VkTracerApp {
-    pub fn create_swapchain_for_window(
-        &mut self,
-        window_size: (u32, u32),
-    ) -> Result<SwapchainHandle> {
+    pub fn create_swapchain_with_surface(&mut self) -> Result<SwapchainHandle> {
         let surface = self
             .surface
             .as_ref()
@@ -21,7 +18,7 @@ impl VkTracerApp {
             surface,
             &self.adapter,
             &self.device,
-            window_size,
+            surface.extent,
         )?;
         Ok(self.swapchain_storage.insert(swapchain))
     }
@@ -69,7 +66,7 @@ impl Swapchain {
         surface: &Surface,
         adapter: &Adapter,
         device: &ash::Device,
-        window_size: (u32, u32),
+        window_size: vk::Extent2D,
     ) -> Result<Self> {
         let capabilities = adapter
             .info
@@ -134,7 +131,7 @@ impl Swapchain {
         device: &ash::Device,
         adapter: &Adapter,
         surface: &Surface,
-        window_size: (u32, u32),
+        window_size: vk::Extent2D,
     ) -> Result<()> {
         unsafe {
             // Destroy previous swapchain images
@@ -175,15 +172,15 @@ impl Swapchain {
     }
 
     fn create_clamped_extent(
-        window_size: (u32, u32),
+        window_size: vk::Extent2D,
         capabilities: &vk::SurfaceCapabilitiesKHR,
     ) -> vk::Extent2D {
         vk::Extent2D::builder()
-            .width(window_size.0.clamp(
+            .width(window_size.width.clamp(
                 capabilities.min_image_extent.width,
                 capabilities.max_image_extent.width,
             ))
-            .height(window_size.1.clamp(
+            .height(window_size.height.clamp(
                 capabilities.min_image_extent.height,
                 capabilities.max_image_extent.height,
             ))

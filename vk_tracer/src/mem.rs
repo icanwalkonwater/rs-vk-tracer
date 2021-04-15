@@ -1,7 +1,7 @@
 mod allocator;
-mod buffers;
+mod buffer;
 mod image;
 
-pub use allocator::*;
-pub use buffers::*;
-pub use image::*;
+pub(crate) use allocator::*;
+pub(crate) use buffer::*;
+pub(crate) use image::*;

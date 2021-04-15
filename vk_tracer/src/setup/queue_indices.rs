@@ -20,15 +20,13 @@ impl From<&AdapterInfo> for QueueFamilyIndices {
 
 impl QueueFamilyIndices {
     pub fn into_queue_create_info(self) -> Vec<vk::DeviceQueueCreateInfo> {
-        let mut queues_create_info = Vec::new();
-
-        // Graphics queue
-        queues_create_info.push(
+        let mut queues_create_info = vec![
+            // Graphics queue
             vk::DeviceQueueCreateInfo::builder()
                 .queue_family_index(self.graphics as u32)
                 .queue_priorities(&QUEUE_PRIORITIES_ONE)
                 .build(),
-        );
+        ];
 
         // Transfer queue
         if self.transfer != self.graphics {

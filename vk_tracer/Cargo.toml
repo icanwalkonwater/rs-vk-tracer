@@ -5,22 +5,25 @@ authors = ["Lucas Malandrino <lucas.malandrino@gmail.com>"]
 edition = "2018"
 
 [features]
+default = ["with_shaderc"]
+with_shaderc = ["shaderc"]
+fps_limiter = []
 
 [dependencies]
-thiserror = "^1.0.21"
-log = "^0.4.11"
+thiserror = "^1.0.24"
+log = "^0.4.14"
 lazy_static = "^1.4.0"
-field-offset = "^0.3.2"
-slotmap = "^1.0.2"
+field-offset = "^0.3.3"
+slotmap = "^1.0.3"
 parking_lot = "^0.11.1"
 
+shaderc = { version = "0.7.2", optional = true }
 raw-window-handle = "^0.3.3"
-ash = "^0.31.0"
-ash-window = "^0.5.0"
+ash = "^0.32.1"
+ash-window = "^0.6.0"
 vk-mem = "^0.2.2"
 
 [dev-dependencies]
 winit = "^0.24.0"
-anyhow = "^1.0.38"
-env_logger = "^0.8.2"
-shaderc = "0.7.1"
+anyhow = "^1.0.40"
+env_logger = "^0.8.3"

@@ -1,6 +1,16 @@
 use crate::VkTracerApp;
 use std::{borrow::Cow, ffi::CStr, fs::File, io::Write};
 
+#[cfg(feature = "with_shaderc")]
+mod shader_compiler;
+#[cfg(feature = "with_shaderc")]
+pub use shader_compiler::*;
+
+#[cfg(feature = "fps_limiter")]
+mod fps_limiter;
+#[cfg(feature = "fps_limiter")]
+pub use fps_limiter::*;
+
 /// Converts a rust string to a CStr in a kinda safe manner.
 /// Can produce strange thing if the input string isn't valid ASCII.
 pub(crate) fn str_to_cstr(s: &str) -> &CStr {

@@ -3,7 +3,11 @@ use std::{
     fs::File,
     time::{Duration, Instant},
 };
-use vk_tracer::prelude::*;
+use vk_tracer::{
+    prelude::*,
+    shaderc::ShaderKind,
+    utils::{FpsLimiter, ShaderCompiler},
+};
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -12,6 +16,20 @@ use winit::{
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
+
+    {
+        let mut compiler = ShaderCompiler::new()?;
+        compiler.compile(
+            "vk_tracer/examples/shaders/simple.vert".into(),
+            ShaderKind::Vertex,
+            "main",
+        )?;
+        compiler.compile(
+            "vk_tracer/examples/shaders/simple.frag".into(),
+            ShaderKind::Fragment,
+            "main",
+        )?;
+    }
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -26,7 +44,7 @@ fn main() -> anyhow::Result<()> {
         .with_extensions(&[VkTracerExtensions::PipelineRaytracing])
         .build(Some((&window, window.inner_size().into())))?;
 
-    let my_swapchain_handle = graphics.create_swapchain_for_window(window.inner_size().into())?;
+    let my_swapchain_handle = graphics.create_swapchain_with_surface()?;
 
     let my_mesh_handle = graphics.create_mesh_indexed(
         &[
@@ -93,20 +111,15 @@ fn main() -> anyhow::Result<()> {
         );
     }
 
-    let mut last_fps_check = Instant::now();
-    let mut frames = 0.0;
-    let mut last_frame_start = Instant::now();
-    // Fps target
-    let min_frame_interval = Duration::from_millis(1000 / 60);
+    let mut fps_limiter = FpsLimiter::new(60.0);
 
     event_loop.run(move |event, _, control| {
         // Run as fast as possible
         *control = ControlFlow::Poll;
 
         // Draw frame if it is time
-        if last_frame_start.elapsed() >= min_frame_interval {
-            last_frame_start = Instant::now();
-            frames += 1.0;
+        if fps_limiter.should_render() {
+            fps_limiter.new_frame();
 
             let (render_target_index, is_suboptimal) = graphics
                 .get_next_swapchain_render_target_index(my_swapchain_handle)
@@ -119,16 +132,6 @@ fn main() -> anyhow::Result<()> {
                     render_target_index,
                 )
                 .unwrap();
-        }
-
-        // Print FPS every second
-        {
-            let fps_frame_duration = last_fps_check.elapsed().as_secs_f32();
-            if fps_frame_duration >= 1.0 {
-                info!("FPS: {}", frames / fps_frame_duration);
-                last_fps_check = Instant::now();
-                frames = 0.0;
-            }
         }
 
         match event {

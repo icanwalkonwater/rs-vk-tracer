@@ -1,7 +1,4 @@
-use std::{
-    collections::{hash_map::RandomState, HashSet},
-    ffi::CStr,
-};
+use std::{collections::HashSet, ffi::CStr};
 
 use ash::{version::InstanceV1_0, vk};
 use log::{debug, error, info};
@@ -167,10 +164,12 @@ fn process_physical_device(
     // *** Check extensions
 
     {
-        use std::iter::FromIterator;
         debug!(" Checking extensions...");
-        let mut missing_extensions =
-            HashSet::<_, RandomState>::from_iter(requirements.required_extensions.iter().cloned());
+        let mut missing_extensions = requirements
+            .required_extensions
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>();
         for extension in info.extensions.iter() {
             let name = unsafe { CStr::from_ptr(extension.extension_name.as_ptr()) };
             if missing_extensions.remove(name) {
@@ -228,7 +227,7 @@ fn process_physical_device(
             properties,
         });
 
-    if let None = graphics_queue {
+    if graphics_queue.is_none() {
         debug!(" - No graphics queue found !");
         return None;
     }
@@ -256,45 +255,6 @@ fn process_physical_device(
         }
     }
 
-    /*let present_queue = info
-        .queue_families
-        .iter()
-        .enumerate()
-        .find(|(index, _)| unsafe {
-            requirements
-                .compatible_surface
-                .as_ref()
-                .map_or(true, |surface| {
-                    surface
-                        .loader
-                        .get_physical_device_surface_support(
-                            info.handle,
-                            *index as u32,
-                            surface.handle,
-                        )
-                        .unwrap_or_else(|err| {
-                            error!(" - Failed to get surface support because of {:?}", err);
-                            false
-                        })
-                })
-        })
-        .map(|(index, &properties)| QueueFamilyInfo {
-            index: index as u32,
-            properties,
-        });
-
-    if let None = present_queue {
-        debug!(" - No queue that support presentation have been found !");
-        return None;
-    }
-    let present_queue = present_queue.unwrap();
-    debug!(
-        " - Present queue found (ID: {}) (x{}) [{:?}]",
-        present_queue.index,
-        present_queue.properties.queue_count,
-        present_queue.properties.queue_flags,
-    );*/
-
     // Transfer
 
     let transfer_queue = info
@@ -311,7 +271,7 @@ fn process_physical_device(
             properties,
         })
         // Fallback to using the graphics queue
-        .unwrap_or(graphics_queue.clone());
+        .unwrap_or_else(|| graphics_queue.clone());
 
     if transfer_queue.index == graphics_queue.index {
         debug!(" - Using the graphics queue for transfer operations");

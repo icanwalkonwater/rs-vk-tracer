@@ -1,16 +1,3 @@
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet},
-    ffi::{CStr, CString},
-};
-
-use ash::{
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-    vk,
-};
-use raw_window_handle::HasRawWindowHandle;
-use slotmap::SlotMap;
-
 use crate::{
     command_recorder::QueueType,
     errors::Result,
@@ -23,8 +10,18 @@ use crate::{
     utils::str_to_cstr,
     VkTracerApp, VULKAN_VERSION,
 };
-
-// TODO: Remove unwrap
+use ash::{
+    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
+    vk,
+};
+use log::debug;
+use raw_window_handle::HasRawWindowHandle;
+use slotmap::SlotMap;
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    ffi::{CStr, CString},
+};
 
 #[derive(Copy, Clone, Debug)]
 enum PhysicalDevicePreference {
@@ -82,7 +79,8 @@ impl VkTracerAppBuilder {
         self,
         window: Option<(&W, (u32, u32))>,
     ) -> Result<VkTracerApp> {
-        let entry = ash::Entry::new()?;
+        let entry = unsafe { ash::Entry::new()? };
+        debug!("Entry created");
 
         let instance = {
             // Convert app info
@@ -117,6 +115,7 @@ impl VkTracerAppBuilder {
 
             unsafe { entry.create_instance(&info, None)? }
         };
+        debug!("Instance created");
 
         let debug_utils = if self.debug_utils {
             Some(DebugUtils::new(&entry, &instance).unwrap())
@@ -157,6 +156,8 @@ impl VkTracerAppBuilder {
                 adapter_requirements,
             );
 
+            debug!("Created adapter");
+
             // Create device
             let device = {
                 let enable_extensions = adapter
@@ -180,12 +181,14 @@ impl VkTracerAppBuilder {
                     )?
                 }
             };
+            debug!("Created device");
 
             (adapter, device)
         };
 
         if let Some(surface) = surface.as_mut() {
             surface.complete(&adapter);
+            debug!("Surface complete");
         }
 
         let vma = vk_mem::Allocator::new(&vk_mem::AllocatorCreateInfo {
@@ -197,6 +200,8 @@ impl VkTracerAppBuilder {
             frame_in_use_count: 0,
             heap_size_limits: None,
         })?;
+
+        debug!("VMA allocator created");
 
         let command_pools = {
             // Pool creation macro
@@ -217,7 +222,7 @@ impl VkTracerAppBuilder {
                         adapter.info.graphics_queue.index,
                         vk::CommandPoolCreateFlags::empty(),
                     )?;
-                    (pool.clone(), pool)
+                    (pool, pool)
                 } else {
                     let graphics_pool = pool_creator(
                         adapter.info.graphics_queue.index,
@@ -235,6 +240,8 @@ impl VkTracerAppBuilder {
             command_pools.insert(QueueType::Transfer, transfer_pool);
             command_pools
         };
+
+        debug!("Command pools created");
 
         Ok(VkTracerApp {
             entry,

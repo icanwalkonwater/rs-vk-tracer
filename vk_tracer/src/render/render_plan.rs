@@ -112,12 +112,19 @@ pub struct SubpassBuilder {
     color_attachments: Box<[usize]>,
 }
 
-impl SubpassBuilder {
-    pub fn new() -> Self {
+impl Default for SubpassBuilder {
+    #[inline]
+    fn default() -> Self {
         Self {
             bind_point: vk::PipelineBindPoint::GRAPHICS,
             color_attachments: Box::default(),
         }
+    }
+}
+
+impl SubpassBuilder {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn graphics(mut self) -> Self {

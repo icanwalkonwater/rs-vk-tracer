@@ -1,21 +1,18 @@
-use std::{collections::HashMap, slice::from_ref};
-
-use ash::{
-    version::{DeviceV1_0, InstanceV1_0},
-    vk,
-};
-use slotmap::{new_key_type, SlotMap};
-
-use present::{Surface, Swapchain};
-use render::{RenderPlan, RenderTarget};
-use setup::Adapter;
-
 use crate::{
     command_recorder::QueueType,
     mesh::Mesh,
     render::{ForwardPipeline, Renderer},
     setup::DebugUtils,
 };
+use ash::{
+    version::{DeviceV1_0, InstanceV1_0},
+    vk,
+};
+use present::{Surface, Swapchain};
+use render::{RenderPlan, RenderTarget};
+use setup::Adapter;
+use slotmap::{new_key_type, SlotMap};
+use std::{collections::HashMap, slice::from_ref};
 
 pub mod command_recorder;
 pub mod mem;
@@ -24,6 +21,10 @@ pub mod present;
 pub mod render;
 pub mod setup;
 pub mod utils;
+
+#[cfg(feature = "with_shaderc")]
+pub use ::shaderc;
+pub use ash;
 
 pub const VULKAN_VERSION: u32 = ash::vk::make_version(1, 2, 0);
 pub const VULKAN_VERSION_STR: &str = "1.2.0";
@@ -35,6 +36,12 @@ pub mod errors {
 
     #[derive(Error, Debug)]
     pub enum VkTracerError {
+        #[cfg(feature = "with_shaderc")]
+        #[error("Shader compiler error: {0}")]
+        ShaderCompilerError(&'static str),
+        #[cfg(feature = "with_shaderc")]
+        #[error("Shaderc error")]
+        ShaderCError(#[from] shaderc::Error),
         #[error("Vulkan error")]
         Vulkan(#[from] ash::vk::Result),
         #[error("Loading error")]
@@ -72,7 +79,7 @@ pub mod prelude {
     pub use crate::{render::SubpassBuilder, setup::VkTracerExtensions};
 
     pub use super::{
-        mesh::{MeshIndex, MeshVertex, VertexXyzUv},
+        mesh::{MeshIndex, VertexXyzUv},
         VkTracerApp,
     };
 }
