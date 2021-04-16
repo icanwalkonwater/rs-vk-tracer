@@ -8,6 +8,7 @@ edition = "2018"
 default = ["with_shaderc"]
 with_shaderc = ["shaderc"]
 fps_limiter = []
+no_storage_checks = []
 
 [dependencies]
 thiserror = "^1.0.24"

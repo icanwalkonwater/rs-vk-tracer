@@ -1,5 +1,5 @@
 use crate::{
-    errors::{HandleType, Result, VkTracerError},
+    errors::{HandleType, Result},
     SwapchainHandle, VkTracerApp,
 };
 use ash::vk;
@@ -17,10 +17,7 @@ impl VkTracerApp {
         &self,
         swapchain: SwapchainHandle,
     ) -> Result<Vec<ImageViewFatHandle>> {
-        let swapchain = self
-            .swapchain_storage
-            .get(swapchain)
-            .ok_or(VkTracerError::InvalidHandle(HandleType::Swapchain))?;
+        let swapchain = storage_access!(self.swapchain_storage, swapchain, HandleType::Swapchain);
 
         Ok(swapchain
             .images

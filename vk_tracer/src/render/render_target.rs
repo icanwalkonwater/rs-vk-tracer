@@ -1,5 +1,5 @@
 use crate::{
-    errors::{HandleType, Result, VkTracerError},
+    errors::{HandleType, Result},
     mem::ImageViewFatHandle,
     RenderPlanHandle, RenderTargetHandle, VkTracerApp,
 };
@@ -12,10 +12,7 @@ impl VkTracerApp {
         render_plan: RenderPlanHandle,
         attachments: &[ImageViewFatHandle],
     ) -> Result<RenderTargetHandle> {
-        let render_plan = self
-            .render_plan_storage
-            .get(render_plan)
-            .ok_or(VkTracerError::InvalidHandle(HandleType::RenderPlan))?;
+        let render_plan = storage_access!(self.render_plan_storage, render_plan, HandleType::RenderPlan);
         debug_assert_eq!(render_plan.attachments.len(), attachments.len());
 
         let attachment_views = attachments.iter().map(|a| a.view).collect::<Vec<_>>();
@@ -45,14 +42,8 @@ impl VkTracerApp {
         render_target: RenderTargetHandle,
         attachments: [ImageViewFatHandle; N],
     ) -> Result<()> {
-        let render_plan = self
-            .render_plan_storage
-            .get(render_plan)
-            .ok_or(VkTracerError::InvalidHandle(HandleType::RenderPlan))?;
-        let render_target = self
-            .render_target_storage
-            .get_mut(render_target)
-            .ok_or(VkTracerError::InvalidHandle(HandleType::RenderTarget))?;
+        let render_plan = storage_access!(self.render_plan_storage, render_plan, HandleType::RenderPlan);
+        let render_target = storage_access_mut!(self.render_target_storage, render_target, HandleType::RenderTarget);
 
         unsafe {
             self.device

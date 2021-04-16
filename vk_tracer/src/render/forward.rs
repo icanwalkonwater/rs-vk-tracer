@@ -6,7 +6,7 @@ use std::{
 use ash::{version::DeviceV1_0, vk, vk::CommandBuffer};
 
 use crate::{
-    errors::{HandleType, Result, VkTracerError},
+    errors::{HandleType, Result},
     mesh::Mesh,
     render::{RenderPlan, VkRecordable},
     utils::str_to_cstr,
@@ -22,14 +22,9 @@ impl VkTracerApp {
         fragment_shader: impl Read + Seek,
         mesh_handle: MeshHandle,
     ) -> Result<ForwardPipelineHandle> {
-        let mesh = self
-            .mesh_storage
-            .get(mesh_handle)
-            .ok_or(VkTracerError::InvalidHandle(HandleType::Mesh))?;
-        let render_plan = self
-            .render_plan_storage
-            .get(render_plan)
-            .ok_or(VkTracerError::InvalidHandle(HandleType::RenderPlan))?;
+        let mesh = storage_access!(self.mesh_storage, mesh_handle, HandleType::Mesh);
+        let render_plan = storage_access!(self.render_plan_storage, render_plan, HandleType::RenderPlan);
+
         let pipeline = ForwardPipeline::new(
             &self.device,
             render_plan,
@@ -173,10 +168,7 @@ impl VkRecordable for ForwardPipeline {
         viewport: vk::Extent2D,
         commands: CommandBuffer,
     ) -> Result<()> {
-        let mesh = app
-            .mesh_storage
-            .get(self.mesh)
-            .ok_or(VkTracerError::InvalidHandle(HandleType::Mesh))?;
+        let mesh = storage_access!(app.mesh_storage, self.mesh, HandleType::Mesh);
 
         app.device.cmd_bind_vertex_buffers(
             commands,

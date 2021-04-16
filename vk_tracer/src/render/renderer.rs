@@ -1,6 +1,6 @@
 use crate::{
     command_recorder::QueueType,
-    errors::{HandleType, Result, VkTracerError},
+    errors::{HandleType, Result},
     render::{RenderablePipelineHandle, VkRecordable},
     RenderPlanHandle, RenderTargetHandle, RendererHandle, VkTracerApp,
 };
@@ -33,7 +33,7 @@ impl VkTracerApp {
     pub fn recreate_renderer(&mut self, renderer: RendererHandle, render_target: RenderTargetHandle) -> Result<()> {
         // We do this like that because otherwise the builder can't borrow &mut self
         let (render_plan, clear_color, pipelines_by_subpass, pipelines_amount) = {
-            let renderer = self.renderer_storage.get_mut(renderer).ok_or(VkTracerError::InvalidHandle(HandleType::Renderer))?;
+            let renderer = storage_access_mut!(self.renderer_storage, renderer, HandleType::Renderer);
 
             // Destroy old
             unsafe {
@@ -63,7 +63,7 @@ impl VkTracerApp {
         let ((main_commands, secondary_commands), fence) = builder.inner_build()?;
         let pipelines_by_subpass = builder.pipelines_by_subpass;
 
-        let renderer = self.renderer_storage.get_mut(renderer).ok_or(VkTracerError::InvalidHandle(HandleType::Renderer))?;
+        let renderer = storage_access_mut!(self.renderer_storage, renderer, HandleType::Renderer);
         renderer.pipelines_by_subpass = pipelines_by_subpass;
         renderer.main_commands = main_commands;
         renderer.secondary_commands = secondary_commands;
@@ -117,16 +117,8 @@ impl RendererBuilder<'_> {
     }
 
     fn inner_build(&self) -> Result<RendererData> {
-        let render_plan = self
-            .app
-            .render_plan_storage
-            .get(self.render_plan)
-            .ok_or(VkTracerError::InvalidHandle(HandleType::RenderPlan))?;
-        let render_target = self
-            .app
-            .render_target_storage
-            .get(self.render_target)
-            .ok_or(VkTracerError::InvalidHandle(HandleType::RenderTarget))?;
+        let render_plan = storage_access!(self.app.render_plan_storage, self.render_plan, HandleType::RenderPlan);
+        let render_target = storage_access!(self.app.render_target_storage, self.render_target, HandleType::RenderTarget);
 
         let device = &self.app.device;
         let pool = self.app.command_pools.get(&QueueType::Graphics).unwrap();
@@ -167,10 +159,7 @@ impl RendererBuilder<'_> {
 
                         match pipeline {
                             RenderablePipelineHandle::Forward(handle) => {
-                                let pipeline =
-                                    self.app.forward_pipeline_storage.get(handle).ok_or(
-                                        VkTracerError::InvalidHandle(HandleType::ForwardPipeline),
-                                    )?;
+                                let pipeline = storage_access!(self.app.forward_pipeline_storage, handle, HandleType::ForwardPipeline);
                                 pipeline.record_commands(
                                     self.app,
                                     render_target.extent,

@@ -27,15 +27,12 @@ impl VkTracerApp {
         &self,
         swapchain: SwapchainHandle,
     ) -> Result<(u32, bool)> {
-        let swapchain = self
-            .swapchain_storage
-            .get(swapchain)
-            .ok_or(VkTracerError::InvalidHandle(HandleType::Swapchain))?;
+        let swapchain = storage_access!(self.swapchain_storage, swapchain, HandleType::Swapchain);
         swapchain.acquire_next_image()
     }
 
     pub fn recreate_swapchain(&mut self, swapchain: SwapchainHandle, new_window_size: (u32, u32)) -> Result<()> {
-        let swapchain = self.swapchain_storage.get_mut(swapchain).ok_or(VkTracerError::InvalidHandle(HandleType::Swapchain))?;
+        let swapchain = storage_access_mut!(self.swapchain_storage, swapchain, HandleType::Swapchain);
         self.adapter.update_surface_capabilities()?;
 
         swapchain.recreate(

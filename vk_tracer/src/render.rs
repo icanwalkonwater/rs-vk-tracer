@@ -1,6 +1,6 @@
 use crate::{
     command_recorder::QueueType,
-    errors::{HandleType, Result, VkTracerError},
+    errors::{HandleType, Result},
     ForwardPipelineHandle, RendererHandle, SwapchainHandle, VkTracerApp,
 };
 use ash::{version::DeviceV1_0, vk};
@@ -44,14 +44,8 @@ impl VkTracerApp {
         swapchain: SwapchainHandle,
         render_target_index: u32,
     ) -> Result<bool> {
-        let renderer = self
-            .renderer_storage
-            .get(renderer)
-            .ok_or(VkTracerError::InvalidHandle(HandleType::Renderer))?;
-        let swapchain = self
-            .swapchain_storage
-            .get(swapchain)
-            .ok_or(VkTracerError::InvalidHandle(HandleType::Swapchain))?;
+        let renderer = storage_access!(self.renderer_storage, renderer, HandleType::Renderer);
+        let swapchain = storage_access!(self.swapchain_storage, swapchain, HandleType::Swapchain);
 
         let render_semaphore = unsafe {
             self.device
