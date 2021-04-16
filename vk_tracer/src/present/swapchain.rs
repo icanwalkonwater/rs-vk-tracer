@@ -1,5 +1,5 @@
 use ash::{version::DeviceV1_0, vk};
-
+use log::debug;
 use crate::{
     errors::{HandleType, Result, VkTracerError},
     present::Surface,
@@ -32,6 +32,7 @@ impl VkTracerApp {
     }
 
     pub fn recreate_swapchain(&mut self, swapchain: SwapchainHandle, new_window_size: (u32, u32)) -> Result<()> {
+        debug!("Recreating swapchain");
         let swapchain = storage_access_mut!(self.swapchain_storage, swapchain, HandleType::Swapchain);
         self.adapter.update_surface_capabilities()?;
 

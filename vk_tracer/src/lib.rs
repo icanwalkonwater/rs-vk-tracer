@@ -17,10 +17,10 @@ use std::{collections::HashMap, slice::from_ref};
 #[macro_use]
 macro_rules! storage_access {
     ($storage:expr, $handle:expr, $ty:expr) => {
-        if cfg!(not(feature = "no_storage_checks")) {
-            $storage.get($handle).ok_or(crate::errors::VkTracerError::InvalidHandle($ty))?
-        } else {
+        if cfg!(all(feature = "no_storage_checks", not(debug_assertions))) {
             unsafe { $storage.get_unchecked($handle) }
+        } else {
+            $storage.get($handle).ok_or(crate::errors::VkTracerError::InvalidHandle($ty))?
         }
     };
 }
@@ -28,10 +28,10 @@ macro_rules! storage_access {
 #[macro_use]
 macro_rules! storage_access_mut {
     ($storage:expr, $handle:expr, $ty:expr) => {
-        if cfg!(not(feature = "no_storage_checks")) {
-            $storage.get_mut($handle).ok_or(crate::errors::VkTracerError::InvalidHandle($ty))?
-        } else {
+        if cfg!(all(feature = "no_storage_checks", not(debug_assertions))) {
             unsafe { $storage.get_unchecked_mut($handle) }
+        } else {
+            $storage.get_mut($handle).ok_or(crate::errors::VkTracerError::InvalidHandle($ty))?
         }
     };
 }
