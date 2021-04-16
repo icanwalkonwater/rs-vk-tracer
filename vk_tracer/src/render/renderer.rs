@@ -29,11 +29,60 @@ impl VkTracerApp {
             pipelines_amount: 0,
         }
     }
+
+    pub fn recreate_renderer(&mut self, renderer: RendererHandle, render_target: RenderTargetHandle) -> Result<()> {
+        // We do this like that because otherwise the builder can't borrow &mut self
+        let (render_plan, clear_color, pipelines_by_subpass, pipelines_amount) = {
+            let renderer = self.renderer_storage.get_mut(renderer).ok_or(VkTracerError::InvalidHandle(HandleType::Renderer))?;
+
+            // Destroy old
+            unsafe {
+                let pool = self.command_pools.get(&QueueType::Graphics).unwrap().1;
+                self.device.free_command_buffers(pool, &[renderer.main_commands]);
+                self.device.free_command_buffers(pool, &renderer.secondary_commands);
+                self.device.destroy_fence(renderer.render_fence, None);
+            }
+
+            (
+                renderer.render_plan,
+                renderer.clear_color,
+                std::mem::take(&mut renderer.pipelines_by_subpass),
+                renderer.pipelines_amount
+            )
+        };
+
+        let builder = RendererBuilder {
+            app: self,
+            render_plan,
+            render_target,
+            clear_color,
+            current_subpass: 0,
+            pipelines_by_subpass,
+            pipelines_amount,
+        };
+        let ((main_commands, secondary_commands), fence) = builder.inner_build()?;
+        let pipelines_by_subpass = builder.pipelines_by_subpass;
+
+        let renderer = self.renderer_storage.get_mut(renderer).ok_or(VkTracerError::InvalidHandle(HandleType::Renderer))?;
+        renderer.pipelines_by_subpass = pipelines_by_subpass;
+        renderer.main_commands = main_commands;
+        renderer.secondary_commands = secondary_commands;
+        renderer.render_fence = fence;
+
+        Ok(())
+    }
 }
 
 pub(crate) struct Renderer {
-    pub(crate) commands: vk::CommandBuffer,
+    pub(crate) main_commands: vk::CommandBuffer,
+    secondary_commands: Box<[vk::CommandBuffer]>,
     pub(crate) render_fence: vk::Fence,
+
+    // For recreation
+    render_plan: RenderPlanHandle,
+    clear_color: vk::ClearValue,
+    pipelines_by_subpass: Vec<Vec<RenderablePipelineHandle>>,
+    pipelines_amount: u32,
 }
 
 pub struct RendererBuilder<'app> {
@@ -46,6 +95,7 @@ pub struct RendererBuilder<'app> {
     pipelines_amount: u32,
 }
 
+type RendererData = ((vk::CommandBuffer, Box<[vk::CommandBuffer]>), vk::Fence);
 impl RendererBuilder<'_> {
     pub fn clear_color(mut self, color: [f32; 4]) -> Self {
         self.clear_color = vk::ClearValue {
@@ -66,7 +116,7 @@ impl RendererBuilder<'_> {
         self
     }
 
-    pub fn build(self) -> Result<RendererHandle> {
+    fn inner_build(&self) -> Result<RendererData> {
         let render_plan = self
             .app
             .render_plan_storage
@@ -169,9 +219,11 @@ impl RendererBuilder<'_> {
                     .contents(vk::SubpassContents::SECONDARY_COMMAND_BUFFERS),
             );
 
+            let mut secondary_commands = Vec::with_capacity(self.pipelines_amount as usize);
             loop {
                 let subpass_commands = secondary_commands_by_subpass.pop().unwrap();
                 device.cmd_execute_commands(top_level_commands, &subpass_commands);
+                secondary_commands.extend(subpass_commands);
 
                 if secondary_commands_by_subpass.is_empty() {
                     break;
@@ -188,7 +240,7 @@ impl RendererBuilder<'_> {
             device.cmd_end_render_pass2(top_level_commands, &vk::SubpassEndInfo::default());
 
             device.end_command_buffer(top_level_commands)?;
-            top_level_commands
+            (top_level_commands, secondary_commands.into_boxed_slice())
         };
 
         // Create the fence already signaled because otherwise we will block infinitely when rendering for the first time
@@ -199,9 +251,20 @@ impl RendererBuilder<'_> {
             )?
         };
 
+        Ok((commands, render_fence))
+    }
+
+    pub fn build(self) -> Result<RendererHandle> {
+        let (commands, render_fence) = self.inner_build()?;
+
         Ok(self.app.renderer_storage.insert(Renderer {
-            commands,
+            main_commands: commands.0,
+            secondary_commands: commands.1,
             render_fence,
+            render_plan: self.render_plan,
+            clear_color: self.clear_color,
+            pipelines_by_subpass: self.pipelines_by_subpass,
+            pipelines_amount: self.pipelines_amount,
         }))
     }
 }

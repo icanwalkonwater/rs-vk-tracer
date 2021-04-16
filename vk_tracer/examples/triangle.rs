@@ -2,6 +2,7 @@ use vk_tracer::{
     prelude::*,
     shaderc::{OptimizationLevel, ShaderKind},
     utils::{FpsLimiter, ShaderCompiler},
+    RenderPlanHandle, RenderTargetHandle, RendererHandle, SwapchainHandle,
 };
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -108,9 +109,9 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     // Create a renderer for each render target
-    let mut my_renderer_handles = Vec::with_capacity(my_render_targets_handles.len());
-    for my_render_target_handle in my_render_targets_handles {
-        my_renderer_handles.push(
+    let mut my_renderers_handles = Vec::with_capacity(my_render_targets_handles.len());
+    for my_render_target_handle in my_render_targets_handles.iter().copied() {
+        my_renderers_handles.push(
             graphics
                 .new_renderer_from_plan(my_render_plan_handle, my_render_target_handle)
                 .execute_pipeline(my_mesh_pipeline_handle.into())
@@ -130,18 +131,30 @@ fn main() -> anyhow::Result<()> {
             fps_limiter.new_frame();
 
             // Acquire the next render target to draw to
-            let (render_target_index, is_suboptimal) = graphics
+            let (render_target_index, should_recreate_swapchain) = graphics
                 .get_next_swapchain_render_target_index(my_swapchain_handle)
                 .unwrap();
 
             // And draw then present through the swapchain
-            graphics
+            let should_recreate_swapchain = graphics
                 .render_and_present(
-                    my_renderer_handles[render_target_index as usize],
+                    my_renderers_handles[render_target_index as usize],
                     my_swapchain_handle,
                     render_target_index,
                 )
-                .unwrap();
+                .unwrap() || should_recreate_swapchain;
+
+            if should_recreate_swapchain {
+                recreate_swapchain(
+                    &mut graphics,
+                    window.inner_size().into(),
+                    my_swapchain_handle,
+                    my_render_plan_handle,
+                    &my_render_targets_handles,
+                    &my_renderers_handles,
+                )
+                    .unwrap();
+            }
         }
 
         match event {
@@ -163,10 +176,48 @@ fn main() -> anyhow::Result<()> {
                 ..
             } => *control = ControlFlow::Exit,
             Event::WindowEvent {
-                event: WindowEvent::Resized(_size),
+                event: WindowEvent::Resized(new_size),
                 ..
-            } => todo!(),
+            } => {
+                recreate_swapchain(
+                    &mut graphics,
+                    new_size.into(),
+                    my_swapchain_handle,
+                    my_render_plan_handle,
+                    &my_render_targets_handles,
+                    &my_renderers_handles,
+                )
+                .unwrap();
+            }
             _ => (),
         }
     });
+}
+
+fn recreate_swapchain(
+    graphics: &mut VkTracerApp,
+    new_size: (u32, u32),
+    swapchain: SwapchainHandle,
+    render_plan: RenderPlanHandle,
+    render_targets: &[RenderTargetHandle],
+    renderers: &[RendererHandle],
+) -> anyhow::Result<()> {
+    // Recreate swapchain
+    graphics.recreate_swapchain(swapchain, new_size)?;
+    let swapchain_images = graphics.get_images_from_swapchain(swapchain)?;
+
+    // Recreate render targets
+    for (render_target, image) in render_targets.iter().zip(swapchain_images.into_iter()) {
+        graphics.recreate_render_target(render_plan, new_size, *render_target, [image])?;
+    }
+
+    // Recreate renderers
+    for (renderer, render_target) in renderers
+        .iter()
+        .copied()
+        .zip(render_targets.iter().copied())
+    {
+        graphics.recreate_renderer(renderer, render_target)?;
+    }
+    Ok(())
 }

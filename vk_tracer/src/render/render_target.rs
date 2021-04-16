@@ -9,22 +9,22 @@ impl VkTracerApp {
     /// The first attachment must be the color attachment
     pub fn allocate_render_target(
         &mut self,
-        render_plan_handle: RenderPlanHandle,
+        render_plan: RenderPlanHandle,
         attachments: &[ImageViewFatHandle],
     ) -> Result<RenderTargetHandle> {
         let render_plan = self
             .render_plan_storage
-            .get(render_plan_handle)
+            .get(render_plan)
             .ok_or(VkTracerError::InvalidHandle(HandleType::RenderPlan))?;
         debug_assert_eq!(render_plan.attachments.len(), attachments.len());
 
-        let attachments_view = attachments.iter().map(|a| a.view).collect::<Vec<_>>();
+        let attachment_views = attachments.iter().map(|a| a.view).collect::<Vec<_>>();
 
         let framebuffer = unsafe {
             self.device.create_framebuffer(
                 &vk::FramebufferCreateInfo::builder()
                     .render_pass(render_plan.render_pass)
-                    .attachments(&attachments_view)
+                    .attachments(&attachment_views)
                     .width(attachments[0].extent.width)
                     .height(attachments[0].extent.height)
                     .layers(1),
@@ -36,6 +36,52 @@ impl VkTracerApp {
             framebuffer,
             extent: attachments[0].extent,
         }))
+    }
+
+    pub fn recreate_render_target<const N: usize>(
+        &mut self,
+        render_plan: RenderPlanHandle,
+        new_window_size: (u32, u32),
+        render_target: RenderTargetHandle,
+        attachments: [ImageViewFatHandle; N],
+    ) -> Result<()> {
+        let render_plan = self
+            .render_plan_storage
+            .get(render_plan)
+            .ok_or(VkTracerError::InvalidHandle(HandleType::RenderPlan))?;
+        let render_target = self
+            .render_target_storage
+            .get_mut(render_target)
+            .ok_or(VkTracerError::InvalidHandle(HandleType::RenderTarget))?;
+
+        unsafe {
+            self.device
+                .destroy_framebuffer(render_target.framebuffer, None);
+        }
+
+        let mut attachment_views = [vk::ImageView::null(); N];
+        for (i, attachment) in attachments.iter().enumerate() {
+            attachment_views[i] = attachment.view;
+        }
+
+        let framebuffer = unsafe {
+            self.device.create_framebuffer(
+                &vk::FramebufferCreateInfo::builder()
+                    .render_pass(render_plan.render_pass)
+                    .attachments(&attachment_views)
+                    .width(new_window_size.0)
+                    .height(new_window_size.1)
+                    .layers(1),
+                None,
+            )?
+        };
+
+        render_target.extent = vk::Extent2D::builder()
+            .width(new_window_size.0)
+            .height(new_window_size.1)
+            .build();
+        render_target.framebuffer = framebuffer;
+        Ok(())
     }
 }
 

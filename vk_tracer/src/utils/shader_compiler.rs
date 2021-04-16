@@ -42,7 +42,7 @@ impl<'a> ShaderCompiler<'a> {
     #[inline]
     pub fn compile_and_return_file(
         &mut self,
-        filename: PathBuf,
+        mut filename: PathBuf,
         kind: shaderc::ShaderKind,
         entry_point: &str,
     ) -> Result<File> {
@@ -71,14 +71,13 @@ impl<'a> ShaderCompiler<'a> {
             warn!("{}", compiled.get_warning_messages());
         }
 
-        let mut dst = filename.clone();
-        dst.set_extension("spv");
+        filename.set_extension("spv");
 
         let mut dst = OpenOptions::new()
             .create(true)
             .read(true)
             .write(true)
-            .open(dst)?;
+            .open(filename)?;
 
         dst.write_all(compiled.as_binary_u8())?;
 

@@ -43,7 +43,7 @@ impl VkTracerApp {
         renderer: RendererHandle,
         swapchain: SwapchainHandle,
         render_target_index: u32,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let renderer = self
             .renderer_storage
             .get(renderer)
@@ -70,7 +70,7 @@ impl VkTracerApp {
             .wait_dst_stage_mask(from_ref(&vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT))
             .wait_semaphores(from_ref(&swapchain.image_available_semaphore))
             .signal_semaphores(from_ref(&render_semaphore))
-            .command_buffers(from_ref(&renderer.commands));
+            .command_buffers(from_ref(&renderer.main_commands));
 
         let present_info = vk::PresentInfoKHR::builder()
             .swapchains(from_ref(&swapchain.handle))
@@ -78,7 +78,7 @@ impl VkTracerApp {
             .image_indices(from_ref(&render_target_index));
 
         let graphics_queue = self.command_pools.get(&QueueType::Graphics).unwrap().0;
-        unsafe {
+        let should_recreate_swapchain = unsafe {
             // Launch render
             self.device.queue_submit(
                 graphics_queue,
@@ -86,10 +86,14 @@ impl VkTracerApp {
                 renderer.render_fence,
             )?;
 
-            let is_suboptimal = swapchain
+            match swapchain
                 .loader
-                .queue_present(graphics_queue, &present_info)?;
-        }
+                .queue_present(graphics_queue, &present_info) {
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => true,
+                err @ Err(_) => err?,
+                Ok(is_suboptimal) => is_suboptimal
+            }
+        };
 
         unsafe {
             // Wait for the end of the render
@@ -100,6 +104,6 @@ impl VkTracerApp {
             self.device.destroy_semaphore(render_semaphore, None);
         }
 
-        Ok(())
+        Ok(should_recreate_swapchain)
     }
 }

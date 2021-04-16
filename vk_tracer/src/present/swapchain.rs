@@ -33,6 +33,21 @@ impl VkTracerApp {
             .ok_or(VkTracerError::InvalidHandle(HandleType::Swapchain))?;
         swapchain.acquire_next_image()
     }
+
+    pub fn recreate_swapchain(&mut self, swapchain: SwapchainHandle, new_window_size: (u32, u32)) -> Result<()> {
+        let swapchain = self.swapchain_storage.get_mut(swapchain).ok_or(VkTracerError::InvalidHandle(HandleType::Swapchain))?;
+        self.adapter.update_surface_capabilities()?;
+
+        swapchain.recreate(
+            &self.device,
+            &self.adapter,
+            self.surface.as_ref().ok_or(VkTracerError::NoSurfaceAvailable)?,
+            vk::Extent2D::builder()
+                .width(new_window_size.0)
+                .height(new_window_size.1)
+                .build()
+        )
+    }
 }
 
 /// Choose the present mode, will fallback to FIFO if the requirements can't be met.

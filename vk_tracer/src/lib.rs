@@ -120,7 +120,7 @@ impl Drop for VkTracerApp {
         unsafe {
             for (_, renderer) in &self.renderer_storage {
                 device.destroy_fence(renderer.render_fence, None);
-                device.free_command_buffers(graphics_pool.1, from_ref(&renderer.commands));
+                device.free_command_buffers(graphics_pool.1, from_ref(&renderer.main_commands));
             }
 
             for (_, pipeline) in &self.forward_pipeline_storage {
