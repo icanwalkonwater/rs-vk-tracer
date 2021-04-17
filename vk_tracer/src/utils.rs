@@ -1,9 +1,9 @@
 use crate::VkTracerApp;
 use std::{borrow::Cow, ffi::CStr, fs::File, io::Write};
 
-#[cfg(feature = "with_shaderc")]
+#[cfg(feature = "shaderc")]
 mod shader_compiler;
-#[cfg(feature = "with_shaderc")]
+#[cfg(feature = "shaderc")]
 pub use shader_compiler::*;
 
 #[cfg(feature = "fps_limiter")]

@@ -44,7 +44,7 @@ pub mod render;
 pub mod setup;
 pub mod utils;
 
-#[cfg(feature = "with_shaderc")]
+#[cfg(feature = "shaderc")]
 pub use ::shaderc;
 pub use ash;
 
@@ -58,10 +58,10 @@ pub mod errors {
 
     #[derive(Error, Debug)]
     pub enum VkTracerError {
-        #[cfg(feature = "with_shaderc")]
+        #[cfg(feature = "shaderc")]
         #[error("Shader compiler error: {0}")]
         ShaderCompilerError(&'static str),
-        #[cfg(feature = "with_shaderc")]
+        #[cfg(feature = "shaderc")]
         #[error("Shaderc error: {0}")]
         ShaderCError(#[from] shaderc::Error),
         #[error("Vulkan error: {0}")]

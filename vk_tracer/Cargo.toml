@@ -5,24 +5,25 @@ authors = ["Lucas Malandrino <lucas.malandrino@gmail.com>"]
 edition = "2018"
 
 [features]
-default = ["with_shaderc"]
-with_shaderc = ["shaderc"]
+default = ["shaderc"]
 fps_limiter = []
 no_storage_checks = []
 
 [dependencies]
+# Conveniences
 thiserror = "^1.0.24"
 log = "^0.4.14"
 lazy_static = "^1.4.0"
 field-offset = "^0.3.3"
 slotmap = "^1.0.3"
 parking_lot = "^0.11.1"
-
-shaderc = { version = "0.7.2", optional = true }
-raw-window-handle = "^0.3.3"
+# Vulkan stuff
 ash = "^0.32.1"
 ash-window = "^0.6.0"
+raw-window-handle = "^0.3.3"
+shaderc = { version = "0.7.2", optional = true }
 vk-mem = "^0.2.2"
+glsl-layout = "0.4.0"
 
 [dev-dependencies]
 winit = "^0.24.0"
