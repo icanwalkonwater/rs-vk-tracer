@@ -15,21 +15,27 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
-      - name: Build default
-        run: cargo build --verbose
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --verbose
 
   build-no-features:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
-      - name: Build no features
-        run: cargo build --no-default-features --verbose
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --verbose --no-default-features
 
   build-all-features:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
-      - name: Build no features
-        run: cargo build --all-features --verbose
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --verbose --all-features

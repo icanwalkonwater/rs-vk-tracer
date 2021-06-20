@@ -121,6 +121,7 @@ pub struct VertexXyzUvNorm {
     pub normal: glm::Vec3,
 }
 
+#[cfg(feature = "math")]
 impl MeshVertex for VertexXyzUvNorm {
     fn binding_description() -> &'static [vk::VertexInputBindingDescription] {
         &*VERTEX_XYZ_UV_NORM_BINDING_DESC
