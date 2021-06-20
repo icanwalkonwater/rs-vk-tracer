@@ -30,16 +30,23 @@ impl VkTracerApp {
         }
     }
 
-    pub fn recreate_renderer(&mut self, renderer: RendererHandle, render_target: RenderTargetHandle) -> Result<()> {
+    pub fn recreate_renderer(
+        &mut self,
+        renderer: RendererHandle,
+        render_target: RenderTargetHandle,
+    ) -> Result<()> {
         // We do this like that because otherwise the builder can't borrow &mut self
         let (render_plan, clear_color, pipelines_by_subpass, pipelines_amount) = {
-            let renderer = storage_access_mut!(self.renderer_storage, renderer, HandleType::Renderer);
+            let renderer =
+                storage_access_mut!(self.renderer_storage, renderer, HandleType::Renderer);
 
             // Destroy old
             unsafe {
                 let pool = self.command_pools.get(&QueueType::Graphics).unwrap().1;
-                self.device.free_command_buffers(pool, &[renderer.main_commands]);
-                self.device.free_command_buffers(pool, &renderer.secondary_commands);
+                self.device
+                    .free_command_buffers(pool, &[renderer.main_commands]);
+                self.device
+                    .free_command_buffers(pool, &renderer.secondary_commands);
                 self.device.destroy_fence(renderer.render_fence, None);
             }
 
@@ -47,7 +54,7 @@ impl VkTracerApp {
                 renderer.render_plan,
                 renderer.clear_color,
                 std::mem::take(&mut renderer.pipelines_by_subpass),
-                renderer.pipelines_amount
+                renderer.pipelines_amount,
             )
         };
 
@@ -117,8 +124,16 @@ impl RendererBuilder<'_> {
     }
 
     fn inner_build(&self) -> Result<RendererData> {
-        let render_plan = storage_access!(self.app.render_plan_storage, self.render_plan, HandleType::RenderPlan);
-        let render_target = storage_access!(self.app.render_target_storage, self.render_target, HandleType::RenderTarget);
+        let render_plan = storage_access!(
+            self.app.render_plan_storage,
+            self.render_plan,
+            HandleType::RenderPlan
+        );
+        let render_target = storage_access!(
+            self.app.render_target_storage,
+            self.render_target,
+            HandleType::RenderTarget
+        );
 
         let device = &self.app.device;
         let pool = self.app.command_pools.get(&QueueType::Graphics).unwrap();
@@ -159,7 +174,11 @@ impl RendererBuilder<'_> {
 
                         match pipeline {
                             RenderablePipelineHandle::Forward(handle) => {
-                                let pipeline = storage_access!(self.app.forward_pipeline_storage, handle, HandleType::ForwardPipeline);
+                                let pipeline = storage_access!(
+                                    self.app.forward_pipeline_storage,
+                                    handle,
+                                    HandleType::ForwardPipeline
+                                );
                                 pipeline.record_commands(
                                     self.app,
                                     render_target.extent,

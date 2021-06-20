@@ -12,7 +12,11 @@ impl VkTracerApp {
         render_plan: RenderPlanHandle,
         attachments: &[ImageViewFatHandle],
     ) -> Result<RenderTargetHandle> {
-        let render_plan = storage_access!(self.render_plan_storage, render_plan, HandleType::RenderPlan);
+        let render_plan = storage_access!(
+            self.render_plan_storage,
+            render_plan,
+            HandleType::RenderPlan
+        );
         debug_assert_eq!(render_plan.attachments.len(), attachments.len());
 
         let attachment_views = attachments.iter().map(|a| a.view).collect::<Vec<_>>();
@@ -42,8 +46,16 @@ impl VkTracerApp {
         render_target: RenderTargetHandle,
         attachments: [ImageViewFatHandle; N],
     ) -> Result<()> {
-        let render_plan = storage_access!(self.render_plan_storage, render_plan, HandleType::RenderPlan);
-        let render_target = storage_access_mut!(self.render_target_storage, render_target, HandleType::RenderTarget);
+        let render_plan = storage_access!(
+            self.render_plan_storage,
+            render_plan,
+            HandleType::RenderPlan
+        );
+        let render_target = storage_access_mut!(
+            self.render_target_storage,
+            render_target,
+            HandleType::RenderTarget
+        );
 
         unsafe {
             self.device

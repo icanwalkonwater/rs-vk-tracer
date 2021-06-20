@@ -143,7 +143,8 @@ fn main() -> anyhow::Result<()> {
                     my_swapchain_handle,
                     render_target_index,
                 )
-                .unwrap() || should_recreate_swapchain;
+                .unwrap()
+                || should_recreate_swapchain;
 
             if should_recreate_swapchain {
                 recreate_swapchain(
@@ -154,7 +155,7 @@ fn main() -> anyhow::Result<()> {
                     &my_render_targets_handles,
                     &my_renderers_handles,
                 )
-                    .unwrap();
+                .unwrap();
             }
         }
 

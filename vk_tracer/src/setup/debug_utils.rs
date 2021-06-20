@@ -1,8 +1,10 @@
 use crate::errors::Result;
 use ash::{extensions::ext, vk};
 use log::{info, log, Level};
-use std::{borrow::Cow, ffi::CStr};
-use std::ffi::CString;
+use std::{
+    borrow::Cow,
+    ffi::{CStr, CString},
+};
 
 pub(crate) struct DebugUtils {
     pub(crate) loader: ext::DebugUtils,
@@ -27,14 +29,24 @@ impl DebugUtils {
         Ok(Self { loader, messenger })
     }
 
-    pub(crate) fn name_object(&self, device: &ash::Device, ty: vk::ObjectType, handle: impl vk::Handle, name: Cow<'static, str>) {
+    pub(crate) fn name_object(
+        &self,
+        device: &ash::Device,
+        ty: vk::ObjectType,
+        handle: impl vk::Handle,
+        name: Cow<'static, str>,
+    ) {
         let name = CString::new(name.as_ref()).unwrap();
         unsafe {
-            self.loader.debug_utils_set_object_name(device.handle(), &vk::DebugUtilsObjectNameInfoEXT::builder()
-                .object_type(ty)
-                .object_handle(handle.as_raw())
-                .object_name(&name)
-            ).expect("Failed to name object");
+            self.loader
+                .debug_utils_set_object_name(
+                    device.handle(),
+                    &vk::DebugUtilsObjectNameInfoEXT::builder()
+                        .object_type(ty)
+                        .object_handle(handle.as_raw())
+                        .object_name(&name),
+                )
+                .expect("Failed to name object");
         }
 
         // Yea

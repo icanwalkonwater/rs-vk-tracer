@@ -5,7 +5,13 @@ use std::{
 
 use ash::{version::DeviceV1_0, vk, vk::CommandBuffer};
 
-use crate::{errors::{HandleType, Result}, mesh::Mesh, render::{RenderPlan, VkRecordable}, utils::str_to_cstr, ForwardPipelineHandle, MeshHandle, RenderPlanHandle, VkTracerApp, DescriptorSetHandle};
+use crate::{
+    errors::{HandleType, Result},
+    mesh::Mesh,
+    render::{RenderPlan, VkRecordable},
+    utils::str_to_cstr,
+    DescriptorSetHandle, ForwardPipelineHandle, MeshHandle, RenderPlanHandle, VkTracerApp,
+};
 
 impl VkTracerApp {
     pub fn create_forward_pipeline(
@@ -18,12 +24,20 @@ impl VkTracerApp {
         mesh_handle: MeshHandle,
     ) -> Result<ForwardPipelineHandle> {
         let mesh = storage_access!(self.mesh_storage, mesh_handle, HandleType::Mesh);
-        let render_plan = storage_access!(self.render_plan_storage, render_plan, HandleType::RenderPlan);
+        let render_plan = storage_access!(
+            self.render_plan_storage,
+            render_plan,
+            HandleType::RenderPlan
+        );
 
         let mut descriptor_layouts = Vec::with_capacity(descriptor_sets_handles.len());
         let mut descriptor_sets = Vec::with_capacity(descriptor_sets_handles.len());
         for handle in descriptor_sets_handles.iter().copied() {
-            let set = storage_access!(self.descriptor_set_storage, handle, HandleType::DescriptorSet);
+            let set = storage_access!(
+                self.descriptor_set_storage,
+                handle,
+                HandleType::DescriptorSet
+            );
             descriptor_layouts.push(set.layout);
             descriptor_sets.push(set.handle);
         }

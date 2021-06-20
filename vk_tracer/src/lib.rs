@@ -48,11 +48,11 @@ pub mod render;
 pub mod setup;
 pub mod utils;
 
+use crate::mem::{DescriptorPool, DescriptorSet, RawBufferAllocation};
 #[cfg(feature = "shaderc")]
 pub use ::shaderc;
 pub use ash;
 pub use glsl_layout;
-use crate::mem::{DescriptorPool, DescriptorSet, RawBufferAllocation};
 
 pub const VULKAN_VERSION: u32 = ash::vk::API_VERSION_1_2;
 pub const VULKAN_VERSION_STR: &str = "1.2.0";
@@ -106,19 +106,14 @@ pub mod errors {
 
 pub mod prelude {
     pub use crate::{
+        errors::Result,
+        glsl_layout::Uniform,
+        mem::DescriptorSetBuilder,
         mesh::{MeshIndex, VertexXyz, VertexXyzUv},
         render::SubpassBuilder,
         setup::VkTracerExtensions,
-        VkTracerApp,
-        errors::Result,
-        MeshHandle,
-        SwapchainHandle,
-        RenderPlanHandle,
-        RenderTargetHandle,
-        ForwardPipelineHandle,
-        RendererHandle,
-        glsl_layout::Uniform,
-        mem::{DescriptorSetBuilder},
+        ForwardPipelineHandle, MeshHandle, RenderPlanHandle, RenderTargetHandle, RendererHandle,
+        SwapchainHandle, VkTracerApp,
     };
     pub use ash::vk::{
         AccessFlags, PipelineStageFlags, SubpassDependency2 as SubpassDependency, SUBPASS_EXTERNAL,

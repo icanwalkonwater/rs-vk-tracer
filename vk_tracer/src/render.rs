@@ -82,10 +82,11 @@ impl VkTracerApp {
 
             match swapchain
                 .loader
-                .queue_present(graphics_queue, &present_info) {
+                .queue_present(graphics_queue, &present_info)
+            {
                 Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => true,
                 err @ Err(_) => err?,
-                Ok(is_suboptimal) => is_suboptimal
+                Ok(is_suboptimal) => is_suboptimal,
             }
         };
 

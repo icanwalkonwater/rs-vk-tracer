@@ -1,11 +1,11 @@
-use ash::{version::DeviceV1_0, vk};
-use log::debug;
 use crate::{
     errors::{HandleType, Result, VkTracerError},
     present::Surface,
     setup::{Adapter, AdapterRequirements},
     SwapchainHandle, VkTracerApp,
 };
+use ash::{version::DeviceV1_0, vk};
+use log::debug;
 
 impl VkTracerApp {
     pub fn create_swapchain_with_surface(&mut self) -> Result<SwapchainHandle> {
@@ -31,19 +31,26 @@ impl VkTracerApp {
         swapchain.acquire_next_image()
     }
 
-    pub fn recreate_swapchain(&mut self, swapchain: SwapchainHandle, new_window_size: (u32, u32)) -> Result<()> {
+    pub fn recreate_swapchain(
+        &mut self,
+        swapchain: SwapchainHandle,
+        new_window_size: (u32, u32),
+    ) -> Result<()> {
         debug!("Recreating swapchain");
-        let swapchain = storage_access_mut!(self.swapchain_storage, swapchain, HandleType::Swapchain);
+        let swapchain =
+            storage_access_mut!(self.swapchain_storage, swapchain, HandleType::Swapchain);
         self.adapter.update_surface_capabilities()?;
 
         swapchain.recreate(
             &self.device,
             &self.adapter,
-            self.surface.as_ref().ok_or(VkTracerError::NoSurfaceAvailable)?,
+            self.surface
+                .as_ref()
+                .ok_or(VkTracerError::NoSurfaceAvailable)?,
             vk::Extent2D::builder()
                 .width(new_window_size.0)
                 .height(new_window_size.1)
-                .build()
+                .build(),
         )
     }
 }

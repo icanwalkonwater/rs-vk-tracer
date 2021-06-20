@@ -1,10 +1,10 @@
-use crate::ash::version::DeviceV1_0;
-use crate::errors::HandleType;
-use crate::errors::Result;
-use crate::{DescriptorSetHandle, VkTracerApp, UboHandle};
+use crate::{
+    ash::version::DeviceV1_0,
+    errors::{HandleType, Result},
+    DescriptorSetHandle, UboHandle, VkTracerApp,
+};
 use ash::vk;
-use std::collections::HashMap;
-use std::slice::from_ref;
+use std::{collections::HashMap, slice::from_ref};
 
 impl VkTracerApp {
     pub fn new_descriptor_sets(&mut self) -> DescriptorPoolBuilder {
@@ -71,7 +71,11 @@ impl DescriptorPoolBuilder<'_> {
         for binding in set.bindings.iter() {
             self.sizes
                 .entry(binding.descriptor_type)
-                .or_insert_with(|| vk::DescriptorPoolSize::builder().ty(binding.descriptor_type).build())
+                .or_insert_with(|| {
+                    vk::DescriptorPoolSize::builder()
+                        .ty(binding.descriptor_type)
+                        .build()
+                })
                 .descriptor_count += 1;
         }
         self.sets.push(set);
@@ -81,11 +85,7 @@ impl DescriptorPoolBuilder<'_> {
     pub fn build(self) -> Result<Box<[DescriptorSetHandle]>> {
         let device = &self.app.device;
 
-        let sizes = self
-            .sizes
-            .values()
-            .map(|size| *size)
-            .collect::<Vec<_>>();
+        let sizes = self.sizes.values().map(|size| *size).collect::<Vec<_>>();
 
         // Allocate pool
         let pool = unsafe {

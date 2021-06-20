@@ -57,7 +57,7 @@ impl RawBufferAllocation {
                 size: size as vk::DeviceSize,
                 usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::UNIFORM_BUFFER,
                 location: vk_mem::MemoryUsage::CpuToGpu,
-            }
+            },
         )
     }
 
@@ -143,8 +143,8 @@ impl RawBufferAllocation {
                 .size(other.real_size)
                 .src_offset(0)
                 .dst_offset(0);
-                //.src_offset(self.info.get_offset() as vk::DeviceSize)
-                //.dst_offset(other.info.get_offset() as vk::DeviceSize);
+            //.src_offset(self.info.get_offset() as vk::DeviceSize)
+            //.dst_offset(other.info.get_offset() as vk::DeviceSize);
 
             device.cmd_copy_buffer(buffer, self.buffer, other.buffer, from_ref(&copy));
         }

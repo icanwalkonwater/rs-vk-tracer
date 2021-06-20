@@ -1,12 +1,16 @@
 use log::debug;
 use nalgebra_glm as glm;
-use vk_tracer::ash::vk::ShaderStageFlags;
-use vk_tracer::prelude::*;
-use vk_tracer::shaderc::{OptimizationLevel, ShaderKind};
-use vk_tracer::utils::{FpsLimiter, ShaderCompiler};
-use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::WindowBuilder;
+use vk_tracer::{
+    ash::vk::ShaderStageFlags,
+    prelude::*,
+    shaderc::{OptimizationLevel, ShaderKind},
+    utils::{FpsLimiter, ShaderCompiler},
+};
+use winit::{
+    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::WindowBuilder,
+};
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -44,44 +48,48 @@ fn main() -> anyhow::Result<()> {
     let swapchain = graphics.create_swapchain_with_surface()?;
     let plane = graphics.create_mesh_indexed(
         &[
-            VertexXyz([1.0, 0.0, 1.0]),
-            VertexXyz([-1.0, 0.0, -1.0]),
-            VertexXyz([-1.0, 0.0, 1.0]),
-            VertexXyz([1.0, 0.0, -1.0]),
-            VertexXyz([1.0, 2.0, 1.0]),
-            VertexXyz([-1.0, 2.0, -1.0]),
-            VertexXyz([-1.0, 2.0, 1.0]),
-            VertexXyz([1.0, 2.0, -1.0]),
+            VertexXyz([1.0, 1.0, -1.0]),
+            VertexXyz([1.0, -1.0, -1.0]),
+            VertexXyz([1.0, 1.0, 1.0]),
+            VertexXyz([1.0, -1.0, 1.0]),
+            VertexXyz([-1.0, 1.0, -1.0]),
+            VertexXyz([-1.0, -1.0, -1.0]),
+            VertexXyz([-1.0, 1.0, 1.0]),
+            VertexXyz([-1.0, -1.0, 1.0]),
         ],
         &[
-            0, 1, 2, 0, 3, 1, 4, 5, 6, 4, 7, 5, 2, 6, 1, 6, 5, 1, 0, 4, 3, 4, 7, 3, 0, 4, 2, 4, 6,
-            2, 3, 7, 1, 7, 5, 1,
+            4, 2, 0, 2, 7, 3, 6, 5, 7, 1, 7, 5, 0, 3, 1, 4, 1, 5, 4, 6, 2, 2, 6, 7, 6, 4, 5, 1, 3,
+            7, 0, 2, 3, 4, 0, 1,
         ],
     )?;
 
     #[derive(Copy, Clone, Uniform)]
-    struct PlaneUbo {
+    struct CameraUbo {
         model: glsl_layout::mat4,
         view: glsl_layout::mat4,
         proj: glsl_layout::mat4,
     }
 
-    let plane_ubo = graphics.create_ubo([PlaneUbo {
-        model: glm::identity::<f32, 4>().into(),
-        view: glm::look_at_rh(
-            &glm::vec3(5.0, 5.0, 5.0),
-            &glm::vec3(0.0, 1.0, 0.0),
-            &glm::vec3(0.0, -1.0, 0.0),
-        )
-        .into(),
-        proj: glm::perspective(
-            window.inner_size().width as f32 / window.inner_size().height as f32,
-            (45f32).to_radians(),
-            0.1,
-            10.0,
-        )
-        .into(),
-    }.std140()])?;
+    fn get_camera_ubo(window: &winit::window::Window) -> CameraUbo {
+        CameraUbo {
+            model: glm::identity::<f32, 4>().into(),
+            view: glm::look_at_rh(
+                &glm::vec3(7.0, -7.0, 5.0),
+                &glm::vec3(0.0, 0.0, 0.0),
+                &glm::vec3(0.0, 1.0, 0.0),
+            )
+            .into(),
+            proj: glm::perspective(
+                window.inner_size().width as f32 / window.inner_size().height as f32,
+                (45f32).to_radians(),
+                0.1,
+                100.0,
+            )
+            .into(),
+        }
+    }
+
+    let plane_ubo = graphics.create_ubo([get_camera_ubo(&window).std140()])?;
 
     let swapchain_images = graphics.get_images_from_swapchain(swapchain)?;
     let render_plan = graphics
@@ -200,25 +208,9 @@ fn main() -> anyhow::Result<()> {
                 )
                 .unwrap();
 
-                graphics.update_ubo(
-                    plane_ubo,
-                    [PlaneUbo {
-                        model: glm::identity::<f32, 4>().into(),
-                        view: glm::look_at_rh(
-                            &glm::vec3(2.0, 2.0, 2.0),
-                            &glm::vec3(0.0, 0.0, 0.0),
-                            &glm::vec3(0.0, -1.0, 0.0),
-                        )
-                        .into(),
-                        proj: glm::perspective(
-                            window.inner_size().width as f32 / window.inner_size().height as f32,
-                            (45f32).to_radians(),
-                            0.1,
-                            10.0,
-                        )
-                        .into(),
-                    }.std140()],
-                ).unwrap();
+                graphics
+                    .update_ubo(plane_ubo, [get_camera_ubo(&window).std140()])
+                    .unwrap();
             }
             _ => (),
         }
