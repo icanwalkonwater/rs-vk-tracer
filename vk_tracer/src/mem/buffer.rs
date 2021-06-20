@@ -26,6 +26,14 @@ impl<D: Copy> TypedBuffer<D> {
         }
     }
 
+    pub(crate) fn new_uniform_buffer(vma: &vk_mem::Allocator, size: usize) -> Result<Self> {
+        unsafe {
+            Ok(TypedBuffer::from_raw(
+                RawBufferAllocation::new_uniform_buffer(vma, size * std::mem::size_of::<D>())?,
+            ))
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.0.info.get_size() / std::mem::size_of::<D>()
     }

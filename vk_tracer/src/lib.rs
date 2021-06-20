@@ -20,7 +20,9 @@ macro_rules! storage_access {
         if cfg!(all(feature = "no_storage_checks", not(debug_assertions))) {
             unsafe { $storage.get_unchecked($handle) }
         } else {
-            $storage.get($handle).ok_or(crate::errors::VkTracerError::InvalidHandle($ty))?
+            $storage
+                .get($handle)
+                .ok_or(crate::errors::VkTracerError::InvalidHandle($ty))?
         }
     };
 }
@@ -31,7 +33,9 @@ macro_rules! storage_access_mut {
         if cfg!(all(feature = "no_storage_checks", not(debug_assertions))) {
             unsafe { $storage.get_unchecked_mut($handle) }
         } else {
-            $storage.get_mut($handle).ok_or(crate::errors::VkTracerError::InvalidHandle($ty))?
+            $storage
+                .get_mut($handle)
+                .ok_or(crate::errors::VkTracerError::InvalidHandle($ty))?
         }
     };
 }
@@ -47,6 +51,8 @@ pub mod utils;
 #[cfg(feature = "shaderc")]
 pub use ::shaderc;
 pub use ash;
+pub use glsl_layout;
+use crate::mem::{DescriptorPool, DescriptorSet, RawBufferAllocation};
 
 pub const VULKAN_VERSION: u32 = ash::vk::make_version(1, 2, 0);
 pub const VULKAN_VERSION_STR: &str = "1.2.0";
@@ -84,35 +90,53 @@ pub mod errors {
 
     #[derive(Debug)]
     pub enum HandleType {
+        // Higher level objects
         Mesh,
+        Ubo,
+
         Swapchain,
         RenderPlan,
         RenderTarget,
         ForwardPipeline,
         Renderer,
+        DescriptorPool,
+        DescriptorSet,
     }
 }
 
 pub mod prelude {
+    pub use crate::{
+        mesh::{MeshIndex, VertexXyz, VertexXyzUv},
+        render::SubpassBuilder,
+        setup::VkTracerExtensions,
+        VkTracerApp,
+        errors::Result,
+        MeshHandle,
+        SwapchainHandle,
+        RenderPlanHandle,
+        RenderTargetHandle,
+        ForwardPipelineHandle,
+        RendererHandle,
+        glsl_layout::Uniform,
+        mem::{DescriptorSetBuilder},
+    };
     pub use ash::vk::{
         AccessFlags, PipelineStageFlags, SubpassDependency2 as SubpassDependency, SUBPASS_EXTERNAL,
-    };
-
-    pub use crate::{render::SubpassBuilder, setup::VkTracerExtensions};
-
-    pub use super::{
-        mesh::{MeshIndex, VertexXyzUv},
-        VkTracerApp,
     };
 }
 
 new_key_type! {
+    // Higher level objects
     pub struct MeshHandle;
+    pub struct UboHandle;
+
     pub struct SwapchainHandle;
     pub struct RenderPlanHandle;
     pub struct RenderTargetHandle;
     pub struct ForwardPipelineHandle;
     pub struct RendererHandle;
+    pub struct DescriptorPoolHandle;
+    pub struct DescriptorSetHandle;
 }
 
 pub struct VkTracerApp {
@@ -125,12 +149,17 @@ pub struct VkTracerApp {
     pub(crate) vma: vk_mem::Allocator,
     pub(crate) command_pools: HashMap<QueueType, (vk::Queue, vk::CommandPool)>,
 
+    // Higher level objects
     pub(crate) mesh_storage: SlotMap<MeshHandle, Mesh>,
+    pub(crate) ubo_storage: SlotMap<UboHandle, RawBufferAllocation>,
+
     pub(crate) swapchain_storage: SlotMap<SwapchainHandle, Swapchain>,
     pub(crate) render_plan_storage: SlotMap<RenderPlanHandle, RenderPlan>,
     pub(crate) render_target_storage: SlotMap<RenderTargetHandle, RenderTarget>,
     pub(crate) forward_pipeline_storage: SlotMap<ForwardPipelineHandle, ForwardPipeline>,
     pub(crate) renderer_storage: SlotMap<RendererHandle, Renderer>,
+    pub(crate) descriptor_pool_storage: SlotMap<DescriptorPoolHandle, DescriptorPool>,
+    pub(crate) descriptor_set_storage: SlotMap<DescriptorSetHandle, DescriptorSet>,
 }
 
 impl Drop for VkTracerApp {
@@ -140,6 +169,14 @@ impl Drop for VkTracerApp {
         let transfer_pool = self.command_pools.get(&QueueType::Transfer).unwrap();
 
         unsafe {
+            for (_, pool) in &self.descriptor_pool_storage {
+                device.destroy_descriptor_pool(pool.handle, None);
+            }
+
+            for (_, set) in &self.descriptor_set_storage {
+                device.destroy_descriptor_set_layout(set.layout, None);
+            }
+
             for (_, renderer) in &self.renderer_storage {
                 device.destroy_fence(renderer.render_fence, None);
                 device.free_command_buffers(graphics_pool.1, from_ref(&renderer.main_commands));
@@ -164,6 +201,10 @@ impl Drop for VkTracerApp {
                     device.destroy_image_view(*view, None);
                 }
                 swapchain.loader.destroy_swapchain(swapchain.handle, None);
+            }
+
+            for (_, ubo) in self.ubo_storage.drain() {
+                ubo.destroy(&self.vma).unwrap();
             }
 
             for (_, mesh) in self.mesh_storage.drain() {

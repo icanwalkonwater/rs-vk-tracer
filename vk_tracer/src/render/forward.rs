@@ -5,19 +5,14 @@ use std::{
 
 use ash::{version::DeviceV1_0, vk, vk::CommandBuffer};
 
-use crate::{
-    errors::{HandleType, Result},
-    mesh::Mesh,
-    render::{RenderPlan, VkRecordable},
-    utils::str_to_cstr,
-    ForwardPipelineHandle, MeshHandle, RenderPlanHandle, VkTracerApp,
-};
+use crate::{errors::{HandleType, Result}, mesh::Mesh, render::{RenderPlan, VkRecordable}, utils::str_to_cstr, ForwardPipelineHandle, MeshHandle, RenderPlanHandle, VkTracerApp, DescriptorSetHandle};
 
 impl VkTracerApp {
     pub fn create_forward_pipeline(
         &mut self,
         render_plan: RenderPlanHandle,
         subpass: u32,
+        descriptor_sets_handles: &[DescriptorSetHandle],
         vertex_shader: impl Read + Seek,
         fragment_shader: impl Read + Seek,
         mesh_handle: MeshHandle,
@@ -25,10 +20,20 @@ impl VkTracerApp {
         let mesh = storage_access!(self.mesh_storage, mesh_handle, HandleType::Mesh);
         let render_plan = storage_access!(self.render_plan_storage, render_plan, HandleType::RenderPlan);
 
+        let mut descriptor_layouts = Vec::with_capacity(descriptor_sets_handles.len());
+        let mut descriptor_sets = Vec::with_capacity(descriptor_sets_handles.len());
+        for handle in descriptor_sets_handles.iter().copied() {
+            let set = storage_access!(self.descriptor_set_storage, handle, HandleType::DescriptorSet);
+            descriptor_layouts.push(set.layout);
+            descriptor_sets.push(set.handle);
+        }
+
         let pipeline = ForwardPipeline::new(
             &self.device,
             render_plan,
             subpass,
+            &descriptor_layouts,
+            descriptor_sets.into_boxed_slice(),
             vertex_shader,
             fragment_shader,
             mesh_handle,
@@ -42,6 +47,7 @@ impl VkTracerApp {
 pub(crate) struct ForwardPipeline {
     pub(crate) pipeline: vk::Pipeline,
     pub(crate) pipeline_layout: vk::PipelineLayout,
+    pub(crate) descriptor_sets: Box<[vk::DescriptorSet]>,
     pub(crate) mesh: MeshHandle,
 }
 
@@ -50,6 +56,8 @@ impl ForwardPipeline {
         device: &ash::Device,
         render_plan: &RenderPlan,
         subpass: u32,
+        descriptor_layouts: &[vk::DescriptorSetLayout],
+        descriptor_sets: Box<[vk::DescriptorSet]>,
         mut vertex_shader: impl Read + Seek,
         mut fragment_shader: impl Read + Seek,
         mesh_handle: MeshHandle,
@@ -89,7 +97,7 @@ impl ForwardPipeline {
             .depth_clamp_enable(false)
             .rasterizer_discard_enable(false)
             .polygon_mode(vk::PolygonMode::FILL)
-            .cull_mode(vk::CullModeFlags::BACK)
+            .cull_mode(vk::CullModeFlags::NONE)
             .front_face(vk::FrontFace::CLOCKWISE)
             .depth_bias_enable(false)
             .line_width(1.0);
@@ -122,7 +130,7 @@ impl ForwardPipeline {
         let pipeline_layout = unsafe {
             device.create_pipeline_layout(
                 &vk::PipelineLayoutCreateInfo::builder()
-                    .set_layouts(&[])
+                    .set_layouts(descriptor_layouts)
                     .push_constant_ranges(&[]),
                 None,
             )?
@@ -156,6 +164,7 @@ impl ForwardPipeline {
         Ok(Self {
             pipeline,
             pipeline_layout,
+            descriptor_sets,
             mesh: mesh_handle,
         })
     }
@@ -174,15 +183,28 @@ impl VkRecordable for ForwardPipeline {
             commands,
             0,
             from_ref(&mesh.vertices.buffer),
-            from_ref(&(mesh.vertices.info.get_offset() as vk::DeviceSize)),
+            &[0],
+            //from_ref(&(mesh.vertices.info.get_offset() as vk::DeviceSize)),
         );
 
         app.device.cmd_bind_index_buffer(
             commands,
             mesh.indices.buffer,
-            mesh.indices.info.get_offset() as vk::DeviceSize,
+            0,
+            // mesh.indices.info.get_offset() as vk::DeviceSize,
             mesh.index_ty.1,
         );
+
+        if !self.descriptor_sets.is_empty() {
+            app.device.cmd_bind_descriptor_sets(
+                commands,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline_layout,
+                0,
+                &self.descriptor_sets,
+                &[],
+            );
+        }
 
         app.device
             .cmd_bind_pipeline(commands, vk::PipelineBindPoint::GRAPHICS, self.pipeline);

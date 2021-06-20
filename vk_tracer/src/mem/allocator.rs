@@ -10,6 +10,7 @@ pub struct BufferDescription {
 
 pub struct RawBufferAllocation {
     pub(crate) buffer: vk::Buffer,
+    pub(crate) real_size: vk::DeviceSize,
     pub(crate) allocation: vk_mem::Allocation,
     pub(crate) info: vk_mem::AllocationInfo,
 }
@@ -48,6 +49,17 @@ impl RawBufferAllocation {
         )
     }
 
+    pub(crate) fn new_uniform_buffer(vma: &vk_mem::Allocator, size: usize) -> Result<Self> {
+        Self::new(
+            vma,
+            &BufferDescription {
+                size: size as vk::DeviceSize,
+                usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::UNIFORM_BUFFER,
+                location: vk_mem::MemoryUsage::CpuToGpu,
+            }
+        )
+    }
+
     pub(crate) fn new(vma: &vk_mem::Allocator, desc: &BufferDescription) -> Result<Self> {
         let (buffer, allocation, info) = vma.create_buffer(
             &vk::BufferCreateInfo::builder()
@@ -62,6 +74,7 @@ impl RawBufferAllocation {
 
         Ok(RawBufferAllocation {
             buffer,
+            real_size: desc.size,
             allocation,
             info,
         })
@@ -126,9 +139,11 @@ impl RawBufferAllocation {
 
         {
             let copy = vk::BufferCopy::builder()
-                .size(self.info.get_size() as vk::DeviceSize)
-                .src_offset(self.info.get_offset() as vk::DeviceSize)
-                .dst_offset(other.info.get_offset() as vk::DeviceSize);
+                .size(other.real_size)
+                .src_offset(0)
+                .dst_offset(0);
+                //.src_offset(self.info.get_offset() as vk::DeviceSize)
+                //.dst_offset(other.info.get_offset() as vk::DeviceSize);
 
             device.cmd_copy_buffer(buffer, self.buffer, other.buffer, from_ref(&copy));
         }
@@ -154,5 +169,17 @@ impl RawBufferAllocation {
     pub(crate) fn destroy(self, vma: &vk_mem::Allocator) -> Result<()> {
         vma.destroy_buffer(self.buffer, &self.allocation)?;
         Ok(())
+    }
+}
+
+impl RawBufferAllocation {
+    pub(crate) fn get_descriptor_buffer_info(&self) -> vk::DescriptorBufferInfo {
+        vk::DescriptorBufferInfo::builder()
+            .buffer(self.buffer)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            //.offset(self.info.get_offset() as vk::DeviceSize)
+            //.range(self.info.get_size() as vk::DeviceSize)
+            .build()
     }
 }

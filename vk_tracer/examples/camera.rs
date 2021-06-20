@@ -1,14 +1,12 @@
-use vk_tracer::{
-    prelude::*,
-    shaderc::{OptimizationLevel, ShaderKind},
-    utils::{FpsLimiter, ShaderCompiler},
-    RenderPlanHandle, RenderTargetHandle, RendererHandle, SwapchainHandle,
-};
-use winit::{
-    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
-};
+use log::debug;
+use nalgebra_glm as glm;
+use vk_tracer::ash::vk::ShaderStageFlags;
+use vk_tracer::prelude::*;
+use vk_tracer::shaderc::{OptimizationLevel, ShaderKind};
+use vk_tracer::utils::{FpsLimiter, ShaderCompiler};
+use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+use winit::event_loop::{ControlFlow, EventLoop};
+use winit::window::WindowBuilder;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -17,62 +15,75 @@ fn main() -> anyhow::Result<()> {
     let (vertex_shader, fragment_shader) = {
         let mut compiler = ShaderCompiler::new()?;
         compiler.set_optimization_level(OptimizationLevel::Performance);
-
         (
             compiler.compile_and_return_file(
-                "vk_tracer/examples/shaders/triangle.vert.glsl".into(),
+                "vk_tracer/examples/shaders/camera.vert.glsl".into(),
                 ShaderKind::Vertex,
                 "main",
             )?,
             compiler.compile_and_return_file(
-                "vk_tracer/examples/shaders/triangle.frag.glsl".into(),
+                "vk_tracer/examples/shaders/camera.frag.glsl".into(),
                 ShaderKind::Fragment,
                 "main",
             )?,
         )
     };
 
-    // Create window
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_title("API Mockup")
         .with_resizable(true)
         .build(&event_loop)?;
 
-    // Create app
     let mut graphics = VkTracerApp::builder()
         .pick_best_physical_device()
         .with_app_info("API Mockup".into(), (1, 0, 0))
         .with_debug_utils()
         .build(Some((&window, window.inner_size().into())))?;
 
-    // Create a swapchain
-    let my_swapchain_handle = graphics.create_swapchain_with_surface()?;
-
-    // Create a mesh (the triangle)
-    let my_mesh_handle = graphics.create_mesh_indexed(
+    let swapchain = graphics.create_swapchain_with_surface()?;
+    let plane = graphics.create_mesh_indexed(
         &[
-            VertexXyzUv {
-                xyz: [1.0, 1.0, 0.0],
-                uv: [1.0, 0.0],
-            },
-            VertexXyzUv {
-                xyz: [-1.0, 1.0, 0.0],
-                uv: [0.0, 0.0],
-            },
-            VertexXyzUv {
-                xyz: [0.0, -1.0, 0.0],
-                uv: [0.5, 1.0],
-            },
+            VertexXyz([1.0, 0.0, 1.0]),
+            VertexXyz([-1.0, 0.0, -1.0]),
+            VertexXyz([-1.0, 0.0, 1.0]),
+            VertexXyz([1.0, 0.0, -1.0]),
+            VertexXyz([1.0, 1.0, 1.0]),
+            VertexXyz([-1.0, 1.0, -1.0]),
+            VertexXyz([-1.0, 1.0, 1.0]),
+            VertexXyz([1.0, 1.0, -1.0]),
         ],
-        &[0, 1, 2],
+        &[0, 1, 2, 0, 3, 1, 4, 5, 6, 4, 7, 5, 2, 6, 1, 6, 5, 1, 0, 4, 3, 4, 7, 3, 0, 4, 2, 4, 6, 2, 3, 7, 1, 7, 5, 1],
     )?;
 
-    // Create a color attachment for each image in the swapchain
-    let my_swapchain_images_ref = graphics.get_images_from_swapchain(my_swapchain_handle)?;
+    #[derive(Copy, Clone, Uniform)]
+    struct PlaneUbo {
+        model: glsl_layout::mat4,
+        view: glsl_layout::mat4,
+        proj: glsl_layout::mat4,
+    }
 
-    // Create a render plan (vulkan render pass), listing the attachments and subpasses of the render
-    let my_render_plan_handle = graphics
+    let plane_ubo = graphics.create_ubo([PlaneUbo {
+        model: glm::translate(&glm::identity(), &glm::vec3(-1.0, 0.0, 0.0)).into(),
+        // view: glm::look_at_rh(
+        //     &glm::vec3(2.0, 2.0, 2.0),
+        //     &glm::vec3(0.0, 0.0, 0.0),
+        //     &glm::vec3(0.0, 0.0, 1.0),
+        // )
+        // .into(),
+        view: glm::translate(&glm::identity(), &glm::vec3(0.0, 0.0, -2.0)).into(),
+        proj: glm::perspective(
+            window.inner_size().width as f32 / window.inner_size().height as f32,
+            (45f32).to_radians(),
+            0.1,
+            10.0,
+        )
+        .into(),
+    }
+    .std140()])?;
+
+    let swapchain_images = graphics.get_images_from_swapchain(swapchain)?;
+    let render_plan = graphics
         .new_render_plan()
         .add_subpass(
             SubpassBuilder::new().graphics().color_attachments([0]),
@@ -87,74 +98,72 @@ fn main() -> anyhow::Result<()> {
                     .build(),
             ),
         )
-        .add_color_attachment_present(my_swapchain_images_ref[0])?
+        .add_color_attachment_present(swapchain_images[0])?
         .build()?;
 
-    // Allocate one render target (vulkan framebuffer) per swapchain image
-    let mut my_render_targets_handles = Vec::with_capacity(my_swapchain_images_ref.len());
-    for my_color_attachment_handle in my_swapchain_images_ref {
-        my_render_targets_handles.push(
-            graphics
-                .allocate_render_target(my_render_plan_handle, &[my_color_attachment_handle])?,
-        );
-    }
+    let render_targets = swapchain_images
+        .into_iter()
+        .map(|image| graphics.allocate_render_target(render_plan, &[image]))
+        .collect::<Result<Vec<_>>>()?;
 
-    // Create a (forward) pipeline for our triangle
-    let my_mesh_pipeline_handle = graphics.create_forward_pipeline(
-        my_render_plan_handle,
+    let descriptor_set = graphics
+        .new_descriptor_sets()
+        .new_set(DescriptorSetBuilder::new().ubo(0, ShaderStageFlags::VERTEX))
+        .build()?[0];
+
+    graphics.write_descriptor_set_ubo(descriptor_set, 0, plane_ubo)?;
+
+    let pipeline = graphics.create_forward_pipeline(
+        render_plan,
         0,
-        &[],
+        &[descriptor_set],
         vertex_shader,
         fragment_shader,
-        my_mesh_handle,
+        plane,
     )?;
 
-    // Create a renderer for each render target
-    let mut my_renderers_handles = Vec::with_capacity(my_render_targets_handles.len());
-    for my_render_target_handle in my_render_targets_handles.iter().copied() {
-        my_renderers_handles.push(
+    let renderers = render_targets
+        .iter()
+        .copied()
+        .map(|render_target| {
             graphics
-                .new_renderer_from_plan(my_render_plan_handle, my_render_target_handle)
-                .execute_pipeline(my_mesh_pipeline_handle.into())
-                .build()?,
-        );
-    }
+                .new_renderer_from_plan(render_plan, render_target)
+                .clear_color([0.1, 0.1, 0.2, 1.0])
+                .execute_pipeline(pipeline.into())
+                .build()
+        })
+        .collect::<Result<Vec<_>>>()?;
 
-    // Limit fps to 60 for convenience
     let mut fps_limiter = FpsLimiter::new(60.0);
-
     event_loop.run(move |event, _, control| {
-        // Run as fast as possible
         *control = ControlFlow::Poll;
 
-        // Don't draw more that 60fps
         if fps_limiter.should_render() {
             fps_limiter.new_frame();
 
-            // Acquire the next render target to draw to
             let (render_target_index, should_recreate_swapchain) = graphics
-                .get_next_swapchain_render_target_index(my_swapchain_handle)
+                .get_next_swapchain_render_target_index(swapchain)
                 .unwrap();
 
-            // And draw then present through the swapchain
             let should_recreate_swapchain = graphics
                 .render_and_present(
-                    my_renderers_handles[render_target_index as usize],
-                    my_swapchain_handle,
+                    renderers[render_target_index as usize],
+                    swapchain,
                     render_target_index,
                 )
-                .unwrap() || should_recreate_swapchain;
+                .unwrap()
+                || should_recreate_swapchain;
 
             if should_recreate_swapchain {
                 recreate_swapchain(
                     &mut graphics,
                     window.inner_size().into(),
-                    my_swapchain_handle,
-                    my_render_plan_handle,
-                    &my_render_targets_handles,
-                    &my_renderers_handles,
+                    swapchain,
+                    render_plan,
+                    &render_targets,
+                    &renderers,
                 )
-                    .unwrap();
+                .unwrap();
             }
         }
 
@@ -183,16 +192,16 @@ fn main() -> anyhow::Result<()> {
                 recreate_swapchain(
                     &mut graphics,
                     new_size.into(),
-                    my_swapchain_handle,
-                    my_render_plan_handle,
-                    &my_render_targets_handles,
-                    &my_renderers_handles,
+                    swapchain,
+                    render_plan,
+                    &render_targets,
+                    &renderers,
                 )
                 .unwrap();
             }
             _ => (),
         }
-    });
+    })
 }
 
 fn recreate_swapchain(
@@ -203,16 +212,11 @@ fn recreate_swapchain(
     render_targets: &[RenderTargetHandle],
     renderers: &[RendererHandle],
 ) -> anyhow::Result<()> {
-    // Recreate swapchain
     graphics.recreate_swapchain(swapchain, new_size)?;
     let swapchain_images = graphics.get_images_from_swapchain(swapchain)?;
-
-    // Recreate render targets
     for (render_target, image) in render_targets.iter().zip(swapchain_images.into_iter()) {
         graphics.recreate_render_target(render_plan, new_size, *render_target, [image])?;
     }
-
-    // Recreate renderers
     for (renderer, render_target) in renderers
         .iter()
         .copied()

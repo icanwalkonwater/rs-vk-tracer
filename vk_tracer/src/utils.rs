@@ -24,8 +24,6 @@ pub(crate) fn cstr_to_str<'a>(ptr: *const std::os::raw::c_char) -> Cow<'a, str> 
 
 pub fn dump_vma_stats(app: &VkTracerApp) {
     let stats = app.vma.build_stats_string(true).unwrap();
-    {
-        let mut f = File::create("vma_stats.json").unwrap();
-        f.write_all(stats.as_bytes()).unwrap();
-    }
+    let mut f = File::create("vma_stats.json").unwrap();
+    f.write_all(stats.as_bytes()).unwrap();
 }
