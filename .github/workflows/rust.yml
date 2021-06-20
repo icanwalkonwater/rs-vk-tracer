@@ -23,12 +23,14 @@ jobs:
       run: cargo build --verbose
 
   build-no-features:
+    needs: checkout
     runs-on: ubuntu-latest
     steps:
     - name: Build no features
       run: cargo build --no-default-features --verbose
 
   build-all-features:
+    needs: checkout
     runs-on: ubuntu-latest
     steps:
       - name: Build no features
