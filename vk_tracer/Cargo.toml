@@ -25,7 +25,7 @@ ash-window = "^0.6"
 raw-window-handle = "^0.3"
 shaderc = { version = "^0.7", optional = true }
 vk-mem = "^0.2"
-glsl-layout = { path = "\\\\wsl$\\Ubuntu\\tmp\\glsl-layout", version = "^0.4" }
+glsl-layout = { git = "https://github.com/icanwalkonwater/glsl-layout.git", branch = "update_nalgebra", version = "^0.4" }
 
 [dev-dependencies]
 winit = "^0.25"
