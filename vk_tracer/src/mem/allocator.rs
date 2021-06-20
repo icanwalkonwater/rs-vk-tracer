@@ -8,6 +8,7 @@ pub struct BufferDescription {
     pub location: vk_mem::MemoryUsage,
 }
 
+#[derive(Clone)]
 pub struct RawBufferAllocation {
     pub(crate) buffer: vk::Buffer,
     pub(crate) real_size: vk::DeviceSize,

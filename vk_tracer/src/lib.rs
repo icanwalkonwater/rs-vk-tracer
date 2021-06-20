@@ -54,7 +54,7 @@ pub use ash;
 pub use glsl_layout;
 use crate::mem::{DescriptorPool, DescriptorSet, RawBufferAllocation};
 
-pub const VULKAN_VERSION: u32 = ash::vk::make_version(1, 2, 0);
+pub const VULKAN_VERSION: u32 = ash::vk::API_VERSION_1_2;
 pub const VULKAN_VERSION_STR: &str = "1.2.0";
 
 pub mod errors {

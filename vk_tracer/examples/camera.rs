@@ -48,12 +48,15 @@ fn main() -> anyhow::Result<()> {
             VertexXyz([-1.0, 0.0, -1.0]),
             VertexXyz([-1.0, 0.0, 1.0]),
             VertexXyz([1.0, 0.0, -1.0]),
-            VertexXyz([1.0, 1.0, 1.0]),
-            VertexXyz([-1.0, 1.0, -1.0]),
-            VertexXyz([-1.0, 1.0, 1.0]),
-            VertexXyz([1.0, 1.0, -1.0]),
+            VertexXyz([1.0, 2.0, 1.0]),
+            VertexXyz([-1.0, 2.0, -1.0]),
+            VertexXyz([-1.0, 2.0, 1.0]),
+            VertexXyz([1.0, 2.0, -1.0]),
         ],
-        &[0, 1, 2, 0, 3, 1, 4, 5, 6, 4, 7, 5, 2, 6, 1, 6, 5, 1, 0, 4, 3, 4, 7, 3, 0, 4, 2, 4, 6, 2, 3, 7, 1, 7, 5, 1],
+        &[
+            0, 1, 2, 0, 3, 1, 4, 5, 6, 4, 7, 5, 2, 6, 1, 6, 5, 1, 0, 4, 3, 4, 7, 3, 0, 4, 2, 4, 6,
+            2, 3, 7, 1, 7, 5, 1,
+        ],
     )?;
 
     #[derive(Copy, Clone, Uniform)]
@@ -64,14 +67,13 @@ fn main() -> anyhow::Result<()> {
     }
 
     let plane_ubo = graphics.create_ubo([PlaneUbo {
-        model: glm::translate(&glm::identity(), &glm::vec3(-1.0, 0.0, 0.0)).into(),
-        // view: glm::look_at_rh(
-        //     &glm::vec3(2.0, 2.0, 2.0),
-        //     &glm::vec3(0.0, 0.0, 0.0),
-        //     &glm::vec3(0.0, 0.0, 1.0),
-        // )
-        // .into(),
-        view: glm::translate(&glm::identity(), &glm::vec3(0.0, 0.0, -2.0)).into(),
+        model: glm::identity::<f32, 4>().into(),
+        view: glm::look_at_rh(
+            &glm::vec3(5.0, 5.0, 5.0),
+            &glm::vec3(0.0, 1.0, 0.0),
+            &glm::vec3(0.0, -1.0, 0.0),
+        )
+        .into(),
         proj: glm::perspective(
             window.inner_size().width as f32 / window.inner_size().height as f32,
             (45f32).to_radians(),
@@ -79,8 +81,7 @@ fn main() -> anyhow::Result<()> {
             10.0,
         )
         .into(),
-    }
-    .std140()])?;
+    }.std140()])?;
 
     let swapchain_images = graphics.get_images_from_swapchain(swapchain)?;
     let render_plan = graphics
@@ -198,6 +199,26 @@ fn main() -> anyhow::Result<()> {
                     &renderers,
                 )
                 .unwrap();
+
+                graphics.update_ubo(
+                    plane_ubo,
+                    [PlaneUbo {
+                        model: glm::identity::<f32, 4>().into(),
+                        view: glm::look_at_rh(
+                            &glm::vec3(2.0, 2.0, 2.0),
+                            &glm::vec3(0.0, 0.0, 0.0),
+                            &glm::vec3(0.0, -1.0, 0.0),
+                        )
+                        .into(),
+                        proj: glm::perspective(
+                            window.inner_size().width as f32 / window.inner_size().height as f32,
+                            (45f32).to_radians(),
+                            0.1,
+                            10.0,
+                        )
+                        .into(),
+                    }.std140()],
+                ).unwrap();
             }
             _ => (),
         }
