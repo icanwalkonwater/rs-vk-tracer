@@ -18,6 +18,7 @@ use std::{collections::HashMap, slice::from_ref};
 macro_rules! storage_access {
     ($storage:expr, $handle:expr, $ty:expr) => {
         if cfg!(all(feature = "no_storage_checks", not(debug_assertions))) {
+            #[allow(unused_unsafe)]
             unsafe { $storage.get_unchecked($handle) }
         } else {
             $storage
@@ -53,6 +54,8 @@ use crate::mem::{DescriptorPool, DescriptorSet, RawBufferAllocation};
 pub use ::shaderc;
 pub use ash;
 pub use glsl_layout;
+#[cfg(feature = "math")]
+pub use nalgebra_glm as glm;
 
 pub const VULKAN_VERSION: u32 = ash::vk::API_VERSION_1_2;
 pub const VULKAN_VERSION_STR: &str = "1.2.0";
@@ -84,8 +87,13 @@ pub mod errors {
         NoSurfaceAvailable,
         #[error("No suitable adapter")]
         NoSuitableAdapterError,
+        #[error("No suitable format can be found")]
+        NoSuitableImageFormat,
         #[error("Invalid {0:?} handle")]
         InvalidHandle(HandleType),
+        #[cfg(feature = "gltf")]
+        #[error("Gltf error: {0}")]
+        GltfError(#[from] gltf::Error),
     }
 
     #[derive(Debug)]
@@ -109,7 +117,7 @@ pub mod prelude {
         errors::Result,
         glsl_layout::Uniform,
         mem::DescriptorSetBuilder,
-        mesh::{MeshIndex, VertexXyz, VertexXyzUv},
+        mesh::{MeshIndex, VertexXyz, VertexXyzUv, VertexXyzUvNorm},
         render::SubpassBuilder,
         setup::VkTracerExtensions,
         ForwardPipelineHandle, MeshHandle, RenderPlanHandle, RenderTargetHandle, RendererHandle,

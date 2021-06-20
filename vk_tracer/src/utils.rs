@@ -11,6 +11,16 @@ mod fps_limiter;
 #[cfg(feature = "fps_limiter")]
 pub use fps_limiter::*;
 
+#[cfg(feature = "camera")]
+mod camera;
+#[cfg(feature = "camera")]
+pub use camera::*;
+
+#[cfg(feature = "model_loader")]
+mod model_loader;
+#[cfg(feature = "model_loader")]
+pub use model_loader::*;
+
 /// Converts a rust string to a CStr in a kinda safe manner.
 /// Can produce strange thing if the input string isn't valid ASCII.
 pub(crate) fn str_to_cstr(s: &str) -> &CStr {

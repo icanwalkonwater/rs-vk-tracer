@@ -8,6 +8,8 @@ use ash::vk;
 use field_offset::offset_of;
 use lazy_static::lazy_static;
 use std::{any::TypeId, borrow::Cow};
+#[cfg(feature = "math")]
+use nalgebra_glm as glm;
 
 impl VkTracerApp {
     pub fn create_mesh_indexed<V: MeshVertex, I: MeshIndex>(
@@ -47,7 +49,34 @@ pub trait MeshVertex: Copy + 'static {
     fn attribute_description() -> &'static [vk::VertexInputAttributeDescription];
 }
 
+#[cfg(feature = "math")]
 lazy_static! {
+    static ref VERTEX_XYZ_UV_NORM_BINDING_DESC: [vk::VertexInputBindingDescription; 1] =
+        [vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(std::mem::size_of::<VertexXyzUvNorm>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build(),];
+    static ref VERTEX_XYZ_UV_NORM_ATTRIBUTE_DESC: [vk::VertexInputAttributeDescription; 3] = [
+        vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(0)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset(offset_of!(VertexXyzUvNorm => xyz).get_byte_offset() as u32)
+            .build(),
+        vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(1)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset(offset_of!(VertexXyzUvNorm => uv).get_byte_offset() as u32)
+            .build(),
+        vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(2)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset(offset_of!(VertexXyzUvNorm => normal).get_byte_offset() as u32)
+            .build(),
+    ];
     static ref VERTEX_XYZ_UV_BINDING_DESC: [vk::VertexInputBindingDescription; 1] =
         [vk::VertexInputBindingDescription::builder()
             .binding(0)
@@ -83,12 +112,34 @@ lazy_static! {
             .build(),];
 }
 
+#[cfg(feature = "math")]
+#[repr(packed)]
 #[derive(Copy, Clone, Debug)]
-pub struct VertexXyzUv {
-    pub xyz: [f32; 3],
-    pub uv: [f32; 2],
+pub struct VertexXyzUvNorm {
+    pub xyz: glm::Vec3,
+    pub uv: glm::Vec2,
+    pub normal: glm::Vec3,
 }
 
+impl MeshVertex for VertexXyzUvNorm {
+    fn binding_description() -> &'static [vk::VertexInputBindingDescription] {
+        &*VERTEX_XYZ_UV_NORM_BINDING_DESC
+    }
+
+    fn attribute_description() -> &'static [vk::VertexInputAttributeDescription] {
+        &*VERTEX_XYZ_UV_NORM_ATTRIBUTE_DESC
+    }
+}
+
+#[cfg(feature = "math")]
+#[repr(packed)]
+#[derive(Copy, Clone, Debug)]
+pub struct VertexXyzUv {
+    pub xyz: glm::Vec3,
+    pub uv: glm::Vec2,
+}
+
+#[cfg(feature = "math")]
 impl MeshVertex for VertexXyzUv {
     fn binding_description() -> &'static [vk::VertexInputBindingDescription] {
         &*VERTEX_XYZ_UV_BINDING_DESC
@@ -99,9 +150,11 @@ impl MeshVertex for VertexXyzUv {
     }
 }
 
+#[cfg(feature = "math")]
 #[derive(Copy, Clone, Debug)]
-pub struct VertexXyz(pub [f32; 3]);
+pub struct VertexXyz(pub glm::Vec3);
 
+#[cfg(feature = "math")]
 impl MeshVertex for VertexXyz {
     fn binding_description() -> &'static [vk::VertexInputBindingDescription] {
         &*VERTEX_XYZ_BINDING_DESC
@@ -119,6 +172,12 @@ pub trait MeshIndex: Copy + 'static {
 impl MeshIndex for u16 {
     fn ty() -> vk::IndexType {
         vk::IndexType::UINT16
+    }
+}
+
+impl MeshIndex for u32 {
+    fn ty() -> vk::IndexType {
+        vk::IndexType::UINT32
     }
 }
 

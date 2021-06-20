@@ -111,8 +111,8 @@ impl ForwardPipeline {
             .depth_clamp_enable(false)
             .rasterizer_discard_enable(false)
             .polygon_mode(vk::PolygonMode::FILL)
-            .cull_mode(vk::CullModeFlags::NONE)
-            .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
+            .cull_mode(vk::CullModeFlags::BACK)
+            .front_face(vk::FrontFace::CLOCKWISE)
             .depth_bias_enable(false)
             .line_width(1.0);
 
@@ -122,6 +122,15 @@ impl ForwardPipeline {
             .min_sample_shading(1.0)
             .alpha_to_coverage_enable(false)
             .alpha_to_one_enable(false);
+
+        let depth_stencil_info = vk::PipelineDepthStencilStateCreateInfo::builder()
+            .depth_test_enable(true)
+            .depth_write_enable(true)
+            .depth_compare_op(vk::CompareOp::LESS)
+            .depth_bounds_test_enable(false)
+            .min_depth_bounds(0.0)
+            .max_depth_bounds(1.0)
+            .stencil_test_enable(false);
 
         let color_blend_info = vk::PipelineColorBlendAttachmentState::builder()
             .color_write_mask(vk::ColorComponentFlags::all())
@@ -157,6 +166,7 @@ impl ForwardPipeline {
                 .input_assembly_state(&input_assembly_info)
                 .rasterization_state(&raster_state_info)
                 .multisample_state(&msaa_info)
+                .depth_stencil_state(&depth_stencil_info)
                 .color_blend_state(&color_blend_state)
                 .viewport_state(&viewport_state_info)
                 .dynamic_state(&dynamic_state)

@@ -9,6 +9,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
+use nalgebra_glm as glm;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -53,19 +54,19 @@ fn main() -> anyhow::Result<()> {
     let my_mesh_handle = graphics.create_mesh_indexed(
         &[
             VertexXyzUv {
-                xyz: [1.0, 1.0, 0.0],
-                uv: [1.0, 0.0],
+                xyz: glm::vec3(1.0, 1.0, 0.0),
+                uv: glm::vec2(1.0, 0.0),
             },
             VertexXyzUv {
-                xyz: [-1.0, 1.0, 0.0],
-                uv: [0.0, 0.0],
+                xyz: glm::vec3(-1.0, 1.0, 0.0),
+                uv: glm::vec2(0.0, 0.0),
             },
             VertexXyzUv {
-                xyz: [0.0, -1.0, 0.0],
-                uv: [0.5, 1.0],
+                xyz: glm::vec3(0.0, -1.0, 0.0),
+                uv: glm::vec2(0.5, 1.0),
             },
         ],
-        &[0, 1, 2],
+        &[0u16, 1, 2],
     )?;
 
     // Create a color attachment for each image in the swapchain

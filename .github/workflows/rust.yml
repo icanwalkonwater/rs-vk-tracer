@@ -10,13 +10,26 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  checkout:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v2
-    - name: Build
+      - uses: actions/checkout@v2
+
+  build:
+    needs: checkout
+    runs-on: ubuntu-latest
+    steps:
+    - name: Build default
       run: cargo build --verbose
-#    - name: Run tests
-#      run: cargo test --verbose
+
+  build-no-features:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Build no features
+      run: cargo build --no-default-features --verbose
+
+  build-all-features:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build no features
+        run: cargo build --all-features --verbose

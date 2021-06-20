@@ -1,4 +1,3 @@
-use log::debug;
 use nalgebra_glm as glm;
 use vk_tracer::utils::Camera;
 use vk_tracer::{
@@ -22,12 +21,12 @@ fn main() -> anyhow::Result<()> {
         compiler.set_optimization_level(OptimizationLevel::Performance);
         (
             compiler.compile_and_return_file(
-                "vk_tracer/examples/shaders/camera.vert.glsl".into(),
+                "vk_tracer/examples/shaders/model.vert.glsl".into(),
                 ShaderKind::Vertex,
                 "main",
             )?,
             compiler.compile_and_return_file(
-                "vk_tracer/examples/shaders/camera.frag.glsl".into(),
+                "vk_tracer/examples/shaders/model.frag.glsl".into(),
                 ShaderKind::Fragment,
                 "main",
             )?,
@@ -45,68 +44,90 @@ fn main() -> anyhow::Result<()> {
         .with_app_info("API Mockup".into(), (1, 0, 0))
         .with_debug_utils()
         .build(Some((&window, window.inner_size().into())))?;
+    //
+    // let (gltf, buffers, textures) = gltf::import("vk_tracer/examples/models/cube.gltf")?;
+    //
+    // for mesh in gltf.meshes() {
+    //     debug!("Mesh {}:", mesh.index());
+    //     for primitive in mesh.primitives() {
+    //         debug!(" - Primitive {}:", primitive.index());
+    //         for (sem, accessor) in primitive.attributes() {
+    //             debug!("  - Attribute: {:?}", sem);
+    //             debug!("    Type: {:?}", accessor.data_type());
+    //             debug!("    Count: {}, Size: {}, Offset: {}", accessor.count(), accessor.size(), accessor.offset());
+    //         }
+    //
+    //         debug!("  - Vertex positions:");
+    //         let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+    //         reader.read_positions().unwrap()
+    //             .for_each(|pos| debug!("   - {:?}", pos));
+    //
+    //         debug!("  - Indices:");
+    //         let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+    //         reader.read_indices().unwrap().into_u32().for_each(|index| debug!("    {}", index));
+    //     }
+    // }
 
     let swapchain = graphics.create_swapchain_with_surface()?;
-    let cube = graphics.create_mesh_indexed(
-        &[
-            VertexXyz(glm::vec3(1.0, 1.0, -1.0)),
-            VertexXyz(glm::vec3(1.0, -1.0, -1.0)),
-            VertexXyz(glm::vec3(1.0, 1.0, 1.0)),
-            VertexXyz(glm::vec3(1.0, -1.0, 1.0)),
-            VertexXyz(glm::vec3(-1.0, 1.0, -1.0)),
-            VertexXyz(glm::vec3(-1.0, -1.0, -1.0)),
-            VertexXyz(glm::vec3(-1.0, 1.0, 1.0)),
-            VertexXyz(glm::vec3(-1.0, -1.0, 1.0)),
-        ],
-        &[
-            4u16, 2, 0, 2, 7, 3, 6, 5, 7, 1, 7, 5, 0, 3, 1, 4, 1, 5, 4, 6, 2, 2, 6, 7, 6, 4, 5, 1, 3,
-            7, 0, 2, 3, 4, 0, 1,
-        ],
-    )?;
+    let suzanne =
+        graphics.load_first_mesh::<VertexXyzUvNorm>("vk_tracer/examples/models/suzanne.glb")?;
 
     #[derive(Copy, Clone, Uniform)]
     struct CameraUbo {
         mvp: glsl_layout::mat4,
+        light_position: glsl_layout::vec3,
     }
 
-    let mut camera = Camera::new_perspective(glm::vec3(7.0, -7.0, 5.0), glm::zero(), 1.0, 45.0);
+    let mut camera = Camera::new_perspective(glm::vec3(5.0, 4.0, 4.0), glm::zero(), 1.0, 70.0);
     camera.aspect_auto(window.inner_size().into());
 
     fn get_camera_ubo(camera: &Camera) -> CameraUbo {
         CameraUbo {
             mvp: camera.compute_mvp(&glm::identity()).into(),
+            light_position: glm::vec3(-7.0, 5.0, 5.0).into(),
         }
     }
 
     let camera_ubo = graphics.create_ubo([get_camera_ubo(&camera).std140()])?;
 
     let swapchain_images = graphics.get_images_from_swapchain(swapchain)?;
+    let depth_image = graphics.create_depth_texture(swapchain)?;
+
     let render_plan = graphics
         .new_render_plan()
         .add_subpass(
-            SubpassBuilder::new().graphics().color_attachments([0]),
+            SubpassBuilder::new()
+                .graphics()
+                .color_attachments([0])
+                .depth_stencil_attachment(1),
             Some(
                 SubpassDependency::builder()
                     .src_subpass(SUBPASS_EXTERNAL)
                     .dst_subpass(0)
-                    .src_stage_mask(PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+                    .src_stage_mask(PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | PipelineStageFlags::EARLY_FRAGMENT_TESTS)
                     .src_access_mask(AccessFlags::empty())
-                    .dst_stage_mask(PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-                    .dst_access_mask(AccessFlags::COLOR_ATTACHMENT_WRITE)
+                    .dst_stage_mask(PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | PipelineStageFlags::EARLY_FRAGMENT_TESTS)
+                    .dst_access_mask(AccessFlags::COLOR_ATTACHMENT_WRITE | AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE)
                     .build(),
             ),
         )
         .add_color_attachment_present(swapchain_images[0])?
+        .set_clear_color(0, [0.1, 0.1, 0.2, 1.0])
+        .add_depth_attachment(depth_image)?
+        .set_clear_depth_stencil(1, 1.0, 0)
         .build()?;
 
     let render_targets = swapchain_images
         .into_iter()
-        .map(|image| graphics.allocate_render_target(render_plan, &[image]))
+        .map(|image| graphics.allocate_render_target(render_plan, &[image, depth_image]))
         .collect::<Result<Vec<_>>>()?;
 
     let descriptor_set = graphics
         .new_descriptor_sets()
-        .new_set(DescriptorSetBuilder::new().ubo(0, ShaderStageFlags::VERTEX))
+        .new_set(
+            DescriptorSetBuilder::new()
+                .ubo(0, ShaderStageFlags::VERTEX | ShaderStageFlags::FRAGMENT),
+        )
         .build()?[0];
 
     graphics.write_descriptor_set_ubo(descriptor_set, 0, camera_ubo)?;
@@ -117,7 +138,7 @@ fn main() -> anyhow::Result<()> {
         &[descriptor_set],
         vertex_shader,
         fragment_shader,
-        cube,
+        suzanne,
     )?;
 
     let renderers = render_targets
@@ -126,7 +147,6 @@ fn main() -> anyhow::Result<()> {
         .map(|render_target| {
             graphics
                 .new_renderer_from_plan(render_plan, render_target)
-                .clear_color([0.1, 0.1, 0.2, 1.0])
                 .execute_pipeline(pipeline.into())
                 .build()
         })

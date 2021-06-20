@@ -4,10 +4,10 @@ use crate::{
     mem::{TypedBuffer, TypedBufferWithStaging},
     UboHandle, VkTracerApp,
 };
-use glsl_layout::Uniform;
+use glsl_layout::{Uniform, Std140};
 
 impl VkTracerApp {
-    pub fn create_ubo<U: Uniform, const N: usize>(&mut self, data: [U; N]) -> Result<UboHandle> {
+    pub fn create_ubo<U: Std140, const N: usize>(&mut self, data: [U; N]) -> Result<UboHandle> {
         let mut staging = TypedBufferWithStaging::new(
             &self.vma,
             TypedBuffer::new_uniform_buffer(&self.vma, data.len())?,

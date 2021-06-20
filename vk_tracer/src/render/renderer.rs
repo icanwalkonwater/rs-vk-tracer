@@ -19,11 +19,6 @@ impl VkTracerApp {
             app: self,
             render_plan,
             render_target,
-            clear_color: vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 0.0, 0.0],
-                },
-            },
             current_subpass: 0,
             pipelines_by_subpass: vec![Vec::with_capacity(1)],
             pipelines_amount: 0,
@@ -36,7 +31,7 @@ impl VkTracerApp {
         render_target: RenderTargetHandle,
     ) -> Result<()> {
         // We do this like that because otherwise the builder can't borrow &mut self
-        let (render_plan, clear_color, pipelines_by_subpass, pipelines_amount) = {
+        let (render_plan, pipelines_by_subpass, pipelines_amount) = {
             let renderer =
                 storage_access_mut!(self.renderer_storage, renderer, HandleType::Renderer);
 
@@ -52,7 +47,6 @@ impl VkTracerApp {
 
             (
                 renderer.render_plan,
-                renderer.clear_color,
                 std::mem::take(&mut renderer.pipelines_by_subpass),
                 renderer.pipelines_amount,
             )
@@ -62,7 +56,6 @@ impl VkTracerApp {
             app: self,
             render_plan,
             render_target,
-            clear_color,
             current_subpass: 0,
             pipelines_by_subpass,
             pipelines_amount,
@@ -87,7 +80,6 @@ pub(crate) struct Renderer {
 
     // For recreation
     render_plan: RenderPlanHandle,
-    clear_color: vk::ClearValue,
     pipelines_by_subpass: Vec<Vec<RenderablePipelineHandle>>,
     pipelines_amount: u32,
 }
@@ -96,7 +88,6 @@ pub struct RendererBuilder<'app> {
     app: &'app mut VkTracerApp,
     render_plan: RenderPlanHandle,
     render_target: RenderTargetHandle,
-    clear_color: vk::ClearValue,
     current_subpass: usize,
     pipelines_by_subpass: Vec<Vec<RenderablePipelineHandle>>,
     pipelines_amount: u32,
@@ -104,13 +95,6 @@ pub struct RendererBuilder<'app> {
 
 type RendererData = ((vk::CommandBuffer, Box<[vk::CommandBuffer]>), vk::Fence);
 impl RendererBuilder<'_> {
-    pub fn clear_color(mut self, color: [f32; 4]) -> Self {
-        self.clear_color = vk::ClearValue {
-            color: vk::ClearColorValue { float32: color },
-        };
-        self
-    }
-
     pub fn execute_pipeline(mut self, pipeline: RenderablePipelineHandle) -> Self {
         self.pipelines_by_subpass[self.current_subpass].push(pipeline);
         self.pipelines_amount += 1;
@@ -207,10 +191,6 @@ impl RendererBuilder<'_> {
             device
                 .begin_command_buffer(top_level_commands, &vk::CommandBufferBeginInfo::default())?;
 
-            let clear_values = std::iter::repeat(self.clear_color)
-                .take(render_plan.attachments.len())
-                .collect::<Vec<_>>();
-
             device.cmd_begin_render_pass2(
                 top_level_commands,
                 &vk::RenderPassBeginInfo::builder()
@@ -222,7 +202,7 @@ impl RendererBuilder<'_> {
                             .extent(render_target.extent)
                             .build(),
                     )
-                    .clear_values(&clear_values),
+                    .clear_values(&render_plan.clear_values),
                 &vk::SubpassBeginInfo::builder()
                     .contents(vk::SubpassContents::SECONDARY_COMMAND_BUFFERS),
             );
@@ -270,7 +250,6 @@ impl RendererBuilder<'_> {
             secondary_commands: commands.1,
             render_fence,
             render_plan: self.render_plan,
-            clear_color: self.clear_color,
             pipelines_by_subpass: self.pipelines_by_subpass,
             pipelines_amount: self.pipelines_amount,
         }))
