@@ -7,9 +7,9 @@ use crate::{
 use ash::vk;
 use field_offset::offset_of;
 use lazy_static::lazy_static;
-use std::{any::TypeId, borrow::Cow};
 #[cfg(feature = "math")]
 use nalgebra_glm as glm;
+use std::{any::TypeId, borrow::Cow};
 
 impl VkTracerApp {
     pub fn create_mesh_indexed<V: MeshVertex, I: MeshIndex>(

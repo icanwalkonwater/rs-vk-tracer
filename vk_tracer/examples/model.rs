@@ -1,10 +1,9 @@
 use nalgebra_glm as glm;
-use vk_tracer::utils::Camera;
 use vk_tracer::{
     ash::vk::ShaderStageFlags,
     prelude::*,
     shaderc::{OptimizationLevel, ShaderKind},
-    utils::{FpsLimiter, ShaderCompiler},
+    utils::{Camera, FpsLimiter, ShaderCompiler},
 };
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -104,10 +103,19 @@ fn main() -> anyhow::Result<()> {
                 SubpassDependency::builder()
                     .src_subpass(SUBPASS_EXTERNAL)
                     .dst_subpass(0)
-                    .src_stage_mask(PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | PipelineStageFlags::EARLY_FRAGMENT_TESTS)
+                    .src_stage_mask(
+                        PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                            | PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+                    )
                     .src_access_mask(AccessFlags::empty())
-                    .dst_stage_mask(PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | PipelineStageFlags::EARLY_FRAGMENT_TESTS)
-                    .dst_access_mask(AccessFlags::COLOR_ATTACHMENT_WRITE | AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE)
+                    .dst_stage_mask(
+                        PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                            | PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+                    )
+                    .dst_access_mask(
+                        AccessFlags::COLOR_ATTACHMENT_WRITE
+                            | AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                    )
                     .build(),
             ),
         )

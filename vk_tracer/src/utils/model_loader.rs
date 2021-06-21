@@ -1,6 +1,8 @@
-use crate::errors::Result;
-use crate::mesh::{MeshVertex, VertexXyz, VertexXyzUvNorm};
-use crate::{MeshHandle, VkTracerApp};
+use crate::{
+    errors::Result,
+    mesh::{MeshVertex, VertexXyz, VertexXyzUvNorm},
+    MeshHandle, VkTracerApp,
+};
 use nalgebra_glm as glm;
 
 pub trait GltfToVertex: MeshVertex + Sized {

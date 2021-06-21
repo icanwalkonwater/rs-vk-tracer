@@ -19,7 +19,9 @@ macro_rules! storage_access {
     ($storage:expr, $handle:expr, $ty:expr) => {
         if cfg!(all(feature = "no_storage_checks", not(debug_assertions))) {
             #[allow(unused_unsafe)]
-            unsafe { $storage.get_unchecked($handle) }
+            unsafe {
+                $storage.get_unchecked($handle)
+            }
         } else {
             $storage
                 .get($handle)
@@ -113,15 +115,12 @@ pub mod errors {
 }
 
 pub mod prelude {
+    #[cfg(feature = "math")]
+    pub use crate::mesh::{VertexXyz, VertexXyzUv, VertexXyzUvNorm};
     pub use crate::{
-        errors::Result,
-        glsl_layout::Uniform,
-        mem::DescriptorSetBuilder,
-        mesh::{MeshIndex, VertexXyz, VertexXyzUv, VertexXyzUvNorm},
-        render::SubpassBuilder,
-        setup::VkTracerExtensions,
-        ForwardPipelineHandle, MeshHandle, RenderPlanHandle, RenderTargetHandle, RendererHandle,
-        SwapchainHandle, VkTracerApp,
+        errors::Result, glsl_layout::Uniform, mem::DescriptorSetBuilder, mesh::MeshIndex,
+        render::SubpassBuilder, setup::VkTracerExtensions, ForwardPipelineHandle, MeshHandle,
+        RenderPlanHandle, RenderTargetHandle, RendererHandle, SwapchainHandle, VkTracerApp,
     };
     pub use ash::vk::{
         AccessFlags, PipelineStageFlags, SubpassDependency2 as SubpassDependency, SUBPASS_EXTERNAL,

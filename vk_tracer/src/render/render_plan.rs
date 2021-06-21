@@ -1,6 +1,5 @@
 use crate::{errors::Result, mem::ImageViewFatHandle, RenderPlanHandle, VkTracerApp};
-use ash::vk::ClearColorValue;
-use ash::{version::DeviceV1_2, vk};
+use ash::{version::DeviceV1_2, vk, vk::ClearColorValue};
 
 impl VkTracerApp {
     pub fn new_render_plan(&mut self) -> RenderPlanBuilder {
@@ -134,7 +133,8 @@ impl RenderPlanBuilder<'_> {
                 .color_attachments(&color_attachments);
 
             if let Some(i) = subpass.depth_stencil_attachment {
-                subpass_description = subpass_description.depth_stencil_attachment(&self.references[i]);
+                subpass_description =
+                    subpass_description.depth_stencil_attachment(&self.references[i]);
 
                 subpasses_references.push(Vec::from([self.references[i]]).into_boxed_slice());
             }

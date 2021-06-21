@@ -1,3 +1,4 @@
+use nalgebra_glm as glm;
 use vk_tracer::{
     prelude::*,
     shaderc::{OptimizationLevel, ShaderKind},
@@ -9,7 +10,6 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
-use nalgebra_glm as glm;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
