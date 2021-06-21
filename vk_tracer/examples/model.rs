@@ -83,7 +83,7 @@ fn main() -> anyhow::Result<()> {
     fn get_camera_ubo(camera: &Camera) -> CameraUbo {
         CameraUbo {
             mvp: camera.compute_mvp(&glm::identity()).into(),
-            light_position: glm::vec3(-7.0, 5.0, 5.0).into(),
+            light_position: glm::vec3(4.0, 1.0, 6.0).into(),
         }
     }
 

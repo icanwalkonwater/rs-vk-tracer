@@ -50,6 +50,7 @@ pub mod present;
 pub mod render;
 pub mod setup;
 pub mod utils;
+pub mod render_graph;
 
 use crate::mem::{DescriptorPool, DescriptorSet, RawBufferAllocation};
 #[cfg(feature = "shaderc")]

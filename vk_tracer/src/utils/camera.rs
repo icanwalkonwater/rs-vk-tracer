@@ -10,13 +10,13 @@ impl Camera {
     pub fn new_perspective(position: glm::Vec3, look_at: glm::Vec3, aspect: f32, fov: f32) -> Self {
         Self {
             fov,
-            view: glm::look_at_lh(&position, &look_at, &glm::vec3(0.0, 1.0, 0.0)),
-            projection: corrected_perspective(glm::perspective_lh(aspect, fov, 0.1, 100.0)),
+            view: glm::look_at(&position, &look_at, &glm::vec3(0.0, 1.0, 0.0)),
+            projection: corrected_perspective(glm::perspective(aspect, fov, 0.1, 100.0)),
         }
     }
 
     pub fn aspect(&mut self, aspect: f32) {
-        self.projection = corrected_perspective(glm::perspective_lh(aspect, self.fov, 0.1, 100.0));
+        self.projection = corrected_perspective(glm::perspective(aspect, self.fov, 0.1, 100.0));
     }
 
     #[inline]
