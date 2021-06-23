@@ -1,21 +1,28 @@
-use crate::render_graph::attachments::AttachmentInfo;
-use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
-use std::fmt::Debug;
+use crate::{errors::Result, render_graph::attachments::AttachmentInfo};
+use log::error;
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    fmt::{Debug, Display},
+    hash::Hash,
+    ops::DerefMut,
+    rc::Rc,
+};
 
 pub struct RenderGraph<Tag: Copy + Clone + Eq + PartialEq + Hash> {
-    attachments: HashMap<Tag, RenderResourceAttachment<Tag>>,
-    passes: Vec<RenderPass<Tag>>,
-    back_buffer: Option<Tag>,
+    pub(crate) resources: Rc<RefCell<HashMap<Tag, RenderGraphResource<Tag>>>>,
+    pub(crate) passes: HashMap<Tag, RenderPass<Tag>>,
+    pub(crate) back_buffer: Option<Tag>,
 }
 
 pub struct RenderPass<Tag: Copy + Clone + Eq + PartialEq + Hash> {
-    tag: Tag,
-    ty: RenderPassType,
-    attachment_inputs: Vec<Tag>,
-    color_outputs: Vec<Tag>,
-    depth_stencil_input: Option<Tag>,
-    depth_stencil_output: Option<Tag>,
+    pub(crate) tag: Tag,
+    pub(crate) resources: Rc<RefCell<HashMap<Tag, RenderGraphResource<Tag>>>>,
+    pub(crate) ty: RenderPassType,
+    pub(crate) color_attachments: Vec<Tag>,
+    pub(crate) input_attachments: Vec<Tag>,
+    pub(crate) depth_stencil_output: Option<Tag>,
+    pub(crate) image_inputs: Vec<Tag>,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -24,39 +31,48 @@ pub enum RenderPassType {
     Compute,
 }
 
-pub(crate) struct RenderResourceAttachment<Tag: Copy + Clone + Eq + PartialEq + Hash> {
-    info: AttachmentInfo,
-    writes: HashSet<Tag>,
-    reads: HashSet<Tag>,
+pub(crate) struct RenderGraphResource<Tag: Copy + Clone + Eq + PartialEq + Hash> {
+    pub(crate) info: AttachmentInfo,
+    pub(crate) written_in_pass: Option<Tag>,
+    pub(crate) read_in_passes: Vec<Tag>,
 }
 
 impl<Tag: Copy + Clone + Eq + PartialEq + Hash> RenderGraph<Tag> {
     pub fn new() -> Self {
         Self {
-            attachments: HashMap::new(),
-            passes: Vec::new(),
+            resources: Rc::new(RefCell::new(HashMap::new())),
+            passes: HashMap::new(),
             back_buffer: None,
         }
     }
 
     pub fn register_attachment(&mut self, tag: Tag, info: AttachmentInfo) {
-        self.attachments.insert(tag, RenderResourceAttachment {
-            info,
-            writes: HashSet::new(),
-            reads: HashSet::new(),
-        });
+        // TODO: better error handling
+        self.resources.borrow_mut().insert(
+            tag,
+            RenderGraphResource {
+                info,
+                written_in_pass: None,
+                read_in_passes: Vec::new(),
+            },
+        );
     }
 
     pub fn new_pass(&mut self, tag: Tag, ty: RenderPassType) -> &mut RenderPass<Tag> {
-        self.passes.push(RenderPass {
+        self.passes.insert(
             tag,
-            ty,
-            attachment_inputs: Vec::new(),
-            color_outputs: Vec::new(),
-            depth_stencil_input: None,
-            depth_stencil_output: None,
-        });
-        self.passes.last_mut().unwrap()
+            RenderPass {
+                tag,
+                resources: self.resources.clone(),
+                ty,
+                color_attachments: Vec::new(),
+                input_attachments: Vec::new(),
+                depth_stencil_output: None,
+                image_inputs: Vec::new(),
+            },
+        );
+
+        self.passes.get_mut(&tag).unwrap()
     }
 
     pub fn set_back_buffer(&mut self, tag: Tag) {
@@ -64,36 +80,111 @@ impl<Tag: Copy + Clone + Eq + PartialEq + Hash> RenderGraph<Tag> {
     }
 }
 
-impl<Tag: Debug> RenderGraph<Tag> {
-    pub fn dump(self) {
+#[cfg(any(test, debug_assertions))]
+impl<Tag: Copy + Clone + Eq + PartialEq + Hash + Display> RenderGraph<Tag> {
+    pub fn dump(&self) -> Result<()> {
+        use std::{fs::File, io::Write};
 
+        fn tag_to_graph_id<Tag: Display>(tag: Tag) -> String {
+            let mut formatted = format!("{}", tag);
+            formatted = formatted.replace(&[' ', '\n', '\t', '\r'][..], "_");
+            formatted
+        }
+
+        let mut out_file = File::create("./raw_render_graph.dot")?;
+        writeln!(out_file, "digraph raw_render_graph {{")?;
+        writeln!(out_file, " rankdir=LR;")?;
+
+        // Write passes
+        for (pass_tag, pass) in &self.passes {
+            writeln!(
+                out_file,
+                " {} [shape=rectangle color=orange style=filled label=\"[{:?}]\\n{}\"]",
+                tag_to_graph_id(pass_tag),
+                pass.ty,
+                pass.tag
+            )?;
+        }
+
+        // Write attachments
+        for (tag, attachment) in self.resources.borrow().iter() {
+            let tag_id = tag_to_graph_id(tag);
+
+            if self.back_buffer.is_some() && self.back_buffer.unwrap() == *tag {
+                writeln!(
+                    out_file,
+                    " {} [shape=oval color=red style=filled label=\"[Backbuffer]\\n{}\\n{:?}\"]",
+                    tag_id, tag, attachment.info.format
+                )?;
+            } else {
+                writeln!(
+                    out_file,
+                    " {} [shape=oval label=\"{}\\n{:?}\"]",
+                    tag_id, tag, attachment.info.format
+                )?;
+            }
+
+            // Write attachment edges
+            if let Some(source_pass) = &attachment.written_in_pass {
+                writeln!(out_file, " {} -> {}", tag_to_graph_id(source_pass), tag_id)?;
+            }
+            for target_pass in &attachment.read_in_passes {
+                writeln!(out_file, " {} -> {}", tag_id, tag_to_graph_id(target_pass))?;
+            }
+        }
+
+        writeln!(out_file, "}}")?;
+        Ok(())
     }
 }
 
 impl<Tag: Copy + Clone + Eq + PartialEq + Hash> RenderPass<Tag> {
-    pub fn add_attachment_input(&mut self, tag: Tag) -> &mut Self {
-        self.attachment_inputs.push(tag);
+    pub fn set_execute_callback(&mut self, commands: fn(ash::vk::CommandBuffer)) -> &mut Self {
+        // TODO
         self
     }
 
-    pub fn add_color_output(&mut self, tag: Tag) -> &mut Self {
-        self.color_outputs.push(tag);
+    pub fn add_color_attachment(&mut self, tag: Tag) -> &mut Self {
+        {
+            let mut resources = self.resources.borrow_mut();
+            let resource = resources.get_mut(&tag).unwrap();
+            if let Some(other_tag) = resource.written_in_pass {
+                // TODO: better error management
+                panic!("RenderGraph: Can't write multiple time to the same logical attachment !");
+            }
+            resource.written_in_pass = Some(self.tag);
+        }
+        self.color_attachments.push(tag);
         self
     }
 
-    pub fn add_color_input_output(&mut self, tag_in: Tag, tag_out: Tag) -> &mut Self {
-        self.attachment_inputs.push(tag_in);
-        self.color_outputs.push(tag_out);
-        self
-    }
-
-    pub fn set_depth_stencil_input(&mut self, tag: Tag) -> &mut Self {
-        self.depth_stencil_input = Some(tag);
+    pub fn add_input_attachment(&mut self, tag: Tag) -> &mut Self {
+        {
+            let mut resources = self.resources.borrow_mut();
+            let resource = resources.get_mut(&tag).unwrap();
+            resource.read_in_passes.push(self.tag);
+        }
+        self.input_attachments.push(tag);
         self
     }
 
     pub fn set_depth_stencil_output(&mut self, tag: Tag) -> &mut Self {
+        {
+            let mut resources = self.resources.borrow_mut();
+            let resource = resources.get_mut(&tag).unwrap();
+            resource.written_in_pass = Some(self.tag);
+        }
         self.depth_stencil_output = Some(tag);
+        self
+    }
+
+    pub fn add_image_input(&mut self, tag: Tag) -> &mut Self {
+        {
+            let mut resources = self.resources.borrow_mut();
+            let resource = resources.get_mut(&tag).unwrap();
+            resource.read_in_passes.push(self.tag);
+        }
+        self.image_inputs.push(tag);
         self
     }
 }

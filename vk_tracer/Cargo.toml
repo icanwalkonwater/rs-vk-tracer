@@ -5,10 +5,11 @@ authors = ["Lucas Malandrino <lucas.malandrino@gmail.com>"]
 edition = "2018"
 
 [features]
-default = ["shaderc", "math", "camera", "model_loader"]
+default = ["shaderc", "math", "camera", "model_loader", "render_graph"]
 math = ["nalgebra-glm", "glsl-layout/nalgebra"]
 camera = ["math"]
 model_loader = ["gltf", "math"]
+render_graph = ["indexmap", "multimap"]
 fps_limiter = []
 no_storage_checks = []
 
@@ -20,6 +21,8 @@ lazy_static = "^1.4"
 field-offset = "^0.3"
 slotmap = "^1.0"
 parking_lot = "^0.11"
+indexmap = { version = "^1.6", optional = true }
+multimap = { version = "^0.8", optional = true }
 
 # 3D stuff
 ash = "^0.32"
@@ -27,7 +30,6 @@ ash-window = "^0.6"
 raw-window-handle = "^0.3"
 shaderc = { version = "^0.7", optional = true }
 vk-mem = "^0.2"
-vk-sync = "^0.1"
 glsl-layout = { git = "https://github.com/icanwalkonwater/glsl-layout.git", branch = "update_nalgebra", version = "^0.4" }
 nalgebra-glm = { version = "^0.13", optional = true }
 gltf = { version = "^0.16", optional = true }

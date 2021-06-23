@@ -48,9 +48,10 @@ pub mod mem;
 pub mod mesh;
 pub mod present;
 pub mod render;
+#[cfg(feature = "render_graph")]
+pub mod render_graph;
 pub mod setup;
 pub mod utils;
-pub mod render_graph;
 
 use crate::mem::{DescriptorPool, DescriptorSet, RawBufferAllocation};
 #[cfg(feature = "shaderc")]
@@ -64,6 +65,8 @@ pub const VULKAN_VERSION: u32 = ash::vk::API_VERSION_1_2;
 pub const VULKAN_VERSION_STR: &str = "1.2.0";
 
 pub mod errors {
+    #[cfg(feature = "render_graph")]
+    use crate::render_graph::GraphValidationError;
     use thiserror::Error;
 
     pub type Result<T> = std::result::Result<T, VkTracerError>;
@@ -97,6 +100,8 @@ pub mod errors {
         #[cfg(feature = "gltf")]
         #[error("Gltf error: {0}")]
         GltfError(#[from] gltf::Error),
+        #[error("Can't bake render graph because of: {0:?}")]
+        InvalidRenderGraph(GraphValidationError),
     }
 
     #[derive(Debug)]

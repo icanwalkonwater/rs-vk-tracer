@@ -4,4 +4,4 @@ members = [
 ]
 
 [patch.crates-io]
-ash = { git = "https://github.com/MaikKlein/ash.git" }
+ash = { git = "https://github.com/MaikKlein/ash.git", branch = "master", version = "0.32.0" }

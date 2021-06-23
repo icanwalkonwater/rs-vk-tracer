@@ -6,7 +6,7 @@ pub enum AttachmentSize {
     Fixed(vk::Extent3D),
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct AttachmentInfo {
     pub size: AttachmentSize,
     pub format: vk::Format,

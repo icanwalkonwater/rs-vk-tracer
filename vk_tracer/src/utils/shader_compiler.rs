@@ -25,6 +25,8 @@ impl<'a> ShaderCompiler<'a> {
             "Failed to create compile options !",
         ))?;
         options.set_target_env(TargetEnv::Vulkan, EnvVersion::Vulkan1_2 as _);
+        options.set_generate_debug_info();
+        options.set_warnings_as_errors();
 
         Ok(Self { compiler, options })
     }
