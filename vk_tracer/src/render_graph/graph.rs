@@ -8,16 +8,18 @@ use std::{
     ops::DerefMut,
     rc::Rc,
 };
+use crate::render_graph::GraphTag;
+use indexmap::IndexMap;
 
-pub struct RenderGraph<Tag: Copy + Clone + Eq + PartialEq + Hash> {
-    pub(crate) resources: Rc<RefCell<HashMap<Tag, RenderGraphResource<Tag>>>>,
+pub struct RenderGraph<Tag: GraphTag> {
+    pub(crate) resources: Rc<RefCell<IndexMap<Tag, RenderGraphResource<Tag>>>>,
     pub(crate) passes: HashMap<Tag, RenderPass<Tag>>,
     pub(crate) back_buffer: Option<Tag>,
 }
 
-pub struct RenderPass<Tag: Copy + Clone + Eq + PartialEq + Hash> {
+pub struct RenderPass<Tag: GraphTag> {
     pub(crate) tag: Tag,
-    pub(crate) resources: Rc<RefCell<HashMap<Tag, RenderGraphResource<Tag>>>>,
+    pub(crate) resources: Rc<RefCell<IndexMap<Tag, RenderGraphResource<Tag>>>>,
     pub(crate) ty: RenderPassType,
     pub(crate) color_attachments: Vec<Tag>,
     pub(crate) input_attachments: Vec<Tag>,
@@ -31,16 +33,16 @@ pub enum RenderPassType {
     Compute,
 }
 
-pub(crate) struct RenderGraphResource<Tag: Copy + Clone + Eq + PartialEq + Hash> {
+pub(crate) struct RenderGraphResource<Tag: GraphTag> {
     pub(crate) info: AttachmentInfo,
     pub(crate) written_in_pass: Option<Tag>,
     pub(crate) read_in_passes: Vec<Tag>,
 }
 
-impl<Tag: Copy + Clone + Eq + PartialEq + Hash> RenderGraph<Tag> {
+impl<Tag: GraphTag> RenderGraph<Tag> {
     pub fn new() -> Self {
         Self {
-            resources: Rc::new(RefCell::new(HashMap::new())),
+            resources: Rc::new(RefCell::new(IndexMap::new())),
             passes: HashMap::new(),
             back_buffer: None,
         }
@@ -80,12 +82,12 @@ impl<Tag: Copy + Clone + Eq + PartialEq + Hash> RenderGraph<Tag> {
     }
 }
 
-#[cfg(any(test, debug_assertions))]
-impl<Tag: Copy + Clone + Eq + PartialEq + Hash + Display> RenderGraph<Tag> {
+/*#[cfg(any(test, debug_assertions))]
+impl<Tag: GraphTag> RenderGraph<Tag> {
     pub fn dump(&self) -> Result<()> {
         use std::{fs::File, io::Write};
 
-        fn tag_to_graph_id<Tag: Display>(tag: Tag) -> String {
+        fn tag_to_graph_id<Tag: GraphTag>(tag: Tag) -> String {
             let mut formatted = format!("{}", tag);
             formatted = formatted.replace(&[' ', '\n', '\t', '\r'][..], "_");
             formatted
@@ -100,7 +102,7 @@ impl<Tag: Copy + Clone + Eq + PartialEq + Hash + Display> RenderGraph<Tag> {
             writeln!(
                 out_file,
                 " {} [shape=rectangle color=orange style=filled label=\"[{:?}]\\n{}\"]",
-                tag_to_graph_id(pass_tag),
+                tag_to_graph_id(*pass_tag),
                 pass.ty,
                 pass.tag
             )?;
@@ -108,7 +110,7 @@ impl<Tag: Copy + Clone + Eq + PartialEq + Hash + Display> RenderGraph<Tag> {
 
         // Write attachments
         for (tag, attachment) in self.resources.borrow().iter() {
-            let tag_id = tag_to_graph_id(tag);
+            let tag_id = tag_to_graph_id(*tag);
 
             if self.back_buffer.is_some() && self.back_buffer.unwrap() == *tag {
                 writeln!(
@@ -136,9 +138,9 @@ impl<Tag: Copy + Clone + Eq + PartialEq + Hash + Display> RenderGraph<Tag> {
         writeln!(out_file, "}}")?;
         Ok(())
     }
-}
+}*/
 
-impl<Tag: Copy + Clone + Eq + PartialEq + Hash> RenderPass<Tag> {
+impl<Tag: GraphTag> RenderPass<Tag> {
     pub fn set_execute_callback(&mut self, commands: fn(ash::vk::CommandBuffer)) -> &mut Self {
         // TODO
         self
