@@ -1,6 +1,7 @@
 mod attachments;
 mod baking;
 mod graph;
+mod allocation;
 
 pub use attachments::*;
 pub use baking::*;
