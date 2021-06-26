@@ -43,8 +43,10 @@ pub(crate) struct BakedRenderPass {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub(crate) struct BakedRenderResource {
+    pub(crate) is_backbuffer: bool,
     pub(crate) size: AttachmentSize,
     pub(crate) format: vk::Format,
+    pub(crate) usages: vk::ImageUsageFlags,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -78,6 +80,7 @@ impl BakedResourceBarrier {
 
 #[derive(Clone)]
 struct SimulatedRenderResource {
+    usages: vk::ImageUsageFlags,
     current_layout: vk::ImageLayout,
     last_usage_stage: vk::PipelineStageFlags,
     last_usage_access: vk::AccessFlags,
@@ -142,8 +145,10 @@ impl BakedRenderGraph {
             baked_resources.resize(
                 physical_resources_len,
                 BakedRenderResource {
+                    is_backbuffer: false,
                     size: AttachmentSize::SwapchainRelative,
                     format: vk::Format::UNDEFINED,
+                    usages: vk::ImageUsageFlags::empty(),
                 },
             );
 
@@ -151,6 +156,10 @@ impl BakedRenderGraph {
                 let baked = &mut baked_resources[logical_to_physical_resources[tag]];
                 baked.size = res.info.size;
                 baked.format = res.info.format;
+
+                if *tag == graph.back_buffer.unwrap() {
+                    baked.is_backbuffer = true;
+                }
             }
 
             (baked_resources, logical_to_physical_resources)
@@ -165,6 +174,7 @@ impl BakedRenderGraph {
             simulated_resources.resize(
                 baked_resources.len(),
                 SimulatedRenderResource {
+                    usages: vk::ImageUsageFlags::empty(),
                     current_layout: vk::ImageLayout::UNDEFINED,
                     last_usage_stage: vk::PipelineStageFlags::TOP_OF_PIPE,
                     last_usage_access: vk::AccessFlags::empty(),
@@ -192,6 +202,8 @@ impl BakedRenderGraph {
                     let color = &mut simulated_resources[physical];
                     let mut barrier = BakedResourceBarrier::new(color);
 
+                    color.usages |= vk::ImageUsageFlags::COLOR_ATTACHMENT;
+
                     barrier.dst_stage = vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT;
                     barrier.dst_access = vk::AccessFlags::COLOR_ATTACHMENT_WRITE;
                     barrier.new_layout = vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL;
@@ -211,6 +223,8 @@ impl BakedRenderGraph {
                     let input = &mut simulated_resources[physical];
                     let mut barrier = BakedResourceBarrier::new(input);
 
+                    input.usages |= vk::ImageUsageFlags::INPUT_ATTACHMENT;
+
                     barrier.dst_stage = vk::PipelineStageFlags::FRAGMENT_SHADER;
                     barrier.dst_access = vk::AccessFlags::INPUT_ATTACHMENT_READ;
                     barrier.new_layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
@@ -224,6 +238,8 @@ impl BakedRenderGraph {
                     let physical = logical_to_physical_resources[depth];
                     let depth = &mut simulated_resources[physical];
                     let mut barrier = BakedResourceBarrier::new(depth);
+
+                    depth.usages |= vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT;
 
                     barrier.dst_stage = vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS
                         | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS;
@@ -240,6 +256,8 @@ impl BakedRenderGraph {
                     let physical = logical_to_physical_resources[image];
                     let image = &mut simulated_resources[physical];
                     let mut barrier = BakedResourceBarrier::new(image);
+
+                    image.usages |= vk::ImageUsageFlags::SAMPLED;
 
                     // Assume image inputs that just entered the graph are in their optimal layout
                     if !image.has_been_used && image.current_layout == vk::ImageLayout::UNDEFINED {

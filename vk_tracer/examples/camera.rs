@@ -96,6 +96,7 @@ fn main() -> anyhow::Result<()> {
             ),
         )
         .add_color_attachment_present(swapchain_images[0])?
+        .set_clear_color(0, [0.1, 0.1, 0.2, 1.0])
         .build()?;
 
     let render_targets = swapchain_images
@@ -125,7 +126,6 @@ fn main() -> anyhow::Result<()> {
         .map(|render_target| {
             graphics
                 .new_renderer_from_plan(render_plan, render_target)
-                .clear_color([0.1, 0.1, 0.2, 1.0])
                 .execute_pipeline(pipeline.into())
                 .build()
         })

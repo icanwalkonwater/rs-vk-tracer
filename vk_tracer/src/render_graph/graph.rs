@@ -10,6 +10,7 @@ use std::{
 };
 use crate::render_graph::GraphTag;
 use indexmap::IndexMap;
+use crate::ash::vk;
 
 pub struct RenderGraph<Tag: GraphTag> {
     pub(crate) resources: Rc<RefCell<IndexMap<Tag, RenderGraphResource<Tag>>>>,

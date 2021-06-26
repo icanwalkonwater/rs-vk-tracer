@@ -56,14 +56,12 @@ impl VkTracerApp {
         assert!(V::is_compatible(&primitive));
 
         let vertices = V::from_gltf(&primitive, &buffers)?;
-        let indices = {
-            primitive
-                .reader(|b| Some(&buffers[b.index()]))
-                .read_indices()
-                .unwrap()
-                .into_u32()
-                .collect::<Vec<_>>()
-        };
+        let indices = primitive
+            .reader(|b| Some(&buffers[b.index()]))
+            .read_indices()
+            .unwrap()
+            .into_u32()
+            .collect::<Vec<_>>();
 
         self.create_mesh_indexed(&vertices, &indices)
     }

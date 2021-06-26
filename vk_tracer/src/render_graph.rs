@@ -52,11 +52,13 @@ mod tests {
         {
             // Swapchain
             assert_eq!(baked_graph.resources[0], BakedRenderResource {
+                is_backbuffer: false,
                 size: AttachmentSize::SwapchainRelative,
                 format: vk::Format::R8G8B8_UNORM,
             });
             // Depth
             assert_eq!(baked_graph.resources[1], BakedRenderResource {
+                is_backbuffer: false,
                 size: AttachmentSize::SwapchainRelative,
                 format: vk::Format::D32_SFLOAT,
             });
@@ -218,72 +220,88 @@ mod tests {
             assert_eq!(
                 baked_graph.resources[0],
                 BakedRenderResource {
+                    is_backbuffer: false,
                     size: AttachmentSize::SwapchainRelative,
                     format: vk::Format::R8G8B8A8_UNORM,
+                    usages: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT,
                 }
             );
             // Position
             assert_eq!(
                 baked_graph.resources[1],
                 BakedRenderResource {
+                    is_backbuffer: false,
                     size: AttachmentSize::SwapchainRelative,
                     format: vk::Format::R16G16B16A16_SFLOAT,
+                    usages: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT,
                 }
             );
             // Normal
             assert_eq!(
                 baked_graph.resources[2],
                 BakedRenderResource {
+                    is_backbuffer: false,
                     size: AttachmentSize::SwapchainRelative,
                     format: vk::Format::R16G16B16A16_SFLOAT,
+                    usages: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT,
                 }
             );
             // Depth
             assert_eq!(
                 baked_graph.resources[3],
                 BakedRenderResource {
+                    is_backbuffer: false,
                     size: AttachmentSize::SwapchainRelative,
                     format: vk::Format::D32_SFLOAT,
+                    usages: vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT,
                 }
             );
             // Shadow Map
             assert_eq!(
                 baked_graph.resources[4],
                 BakedRenderResource {
+                    is_backbuffer: false,
                     size: AttachmentSize::Fixed(vk::Extent3D {
                         width: 1024,
                         height: 1024,
                         depth: 1,
                     }),
                     format: vk::Format::D32_SFLOAT,
+                    usages: vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT,
                 }
             );
             // Shaded
             assert_eq!(
                 baked_graph.resources[5],
                 BakedRenderResource {
+                    is_backbuffer: false,
                     size: AttachmentSize::SwapchainRelative,
                     format: vk::Format::R8G8B8_SRGB,
+                    usages: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT,
                 }
             );
             // ToneMap
             assert_eq!(
                 baked_graph.resources[6],
                 BakedRenderResource {
+                    is_backbuffer: false,
                     size: AttachmentSize::Fixed(vk::Extent3D {
                         width: 256,
                         height: 256,
                         depth: 1,
                     }),
                     format: vk::Format::R8G8B8_UNORM,
+                    usages: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::INPUT_ATTACHMENT,
                 }
             );
             // Swapchain
             assert_eq!(
                 baked_graph.resources[7],
                 BakedRenderResource {
+                    is_backbuffer: true,
                     size: AttachmentSize::SwapchainRelative,
                     format: vk::Format::R8G8B8_SRGB,
+                    usages: vk::ImageUsageFlags::COLOR_ATTACHMENT,
                 }
             );
         }

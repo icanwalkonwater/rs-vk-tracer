@@ -51,7 +51,6 @@ impl VkTracerApp {
                     .height(swapchain.extent.height)
                     .depth(1)
                     .build(),
-                tiling: vk::ImageTiling::OPTIMAL,
                 format,
                 usage: vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
                 array_layers: 1,
@@ -59,7 +58,11 @@ impl VkTracerApp {
             },
         )?;
 
-        let image_view = image.fullscreen_view(&self.device, vk::ImageAspectFlags::DEPTH)?;
+        let mut aspect = vk::ImageAspectFlags::DEPTH;
+        if has_stencil(format) {
+            aspect |= vk::ImageAspectFlags::STENCIL;
+        }
+        let image_view = image.fullscreen_view(&self.device, aspect)?;
 
         Ok(ImageViewFatHandle {
             handle: image.handle,
@@ -79,9 +82,9 @@ fn find_depth_format(app: &VkTracerApp) -> Result<vk::Format> {
     find_supported_format(
         app,
         [
-            vk::Format::D32_SFLOAT,
-            vk::Format::D32_SFLOAT_S8_UINT,
             vk::Format::D24_UNORM_S8_UINT,
+            vk::Format::D32_SFLOAT_S8_UINT,
+            vk::Format::D32_SFLOAT,
         ],
         vk::ImageTiling::OPTIMAL,
         vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
@@ -127,7 +130,6 @@ fn find_supported_format<const N: usize>(
 pub struct ImageDescription {
     pub(crate) ty: vk::ImageType,
     pub(crate) extent: vk::Extent3D,
-    pub(crate) tiling: vk::ImageTiling,
     pub(crate) format: vk::Format,
     pub(crate) usage: vk::ImageUsageFlags,
 
@@ -156,7 +158,7 @@ impl RawImageAllocation {
                 .mip_levels(desc.mip_levels)
                 .array_layers(desc.array_layers)
                 .samples(vk::SampleCountFlags::TYPE_1)
-                .tiling(desc.tiling)
+                .tiling(vk::ImageTiling::OPTIMAL)
                 .usage(desc.usage)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE)
                 .initial_layout(vk::ImageLayout::UNDEFINED),
@@ -182,7 +184,9 @@ impl RawImageAllocation {
         aspect: vk::ImageAspectFlags,
     ) -> Result<vk::ImageView> {
         let view_type = match self.ty {
+            vk::ImageType::TYPE_1D => vk::ImageViewType::TYPE_1D,
             vk::ImageType::TYPE_2D => vk::ImageViewType::TYPE_2D,
+            vk::ImageType::TYPE_3D => vk::ImageViewType::TYPE_3D,
             _ => todo!(),
         };
 

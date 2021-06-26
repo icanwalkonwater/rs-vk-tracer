@@ -223,7 +223,9 @@ impl Drop for VkTracerApp {
             self.vma.destroy();
 
             device.destroy_command_pool(transfer_pool.1, None);
-            device.destroy_command_pool(graphics_pool.1, None);
+            if transfer_pool.1 != graphics_pool.1 {
+                device.destroy_command_pool(graphics_pool.1, None);
+            }
 
             if let Some(surface) = self.surface.as_ref() {
                 surface.loader.destroy_surface(surface.handle, None);
