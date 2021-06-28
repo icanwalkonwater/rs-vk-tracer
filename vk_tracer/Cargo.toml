@@ -25,7 +25,7 @@ indexmap = { version = "^1.6", optional = true }
 multimap = { version = "^0.8", optional = true }
 
 # 3D stuff
-ash = "^0.32"
+ash = "=0.32.0"
 ash-window = "^0.6"
 raw-window-handle = "^0.3"
 shaderc = { version = "^0.7", optional = true }

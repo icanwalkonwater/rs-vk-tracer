@@ -6,6 +6,7 @@ use crate::present::Swapchain;
 use crate::render_graph::{AttachmentSize, BakedRenderGraph, RenderPassType};
 use crate::{SwapchainHandle, VkTracerApp};
 use crate::ash::version::DeviceV1_2;
+use std::slice::from_ref;
 
 pub struct RenderGraphResourceAllocation {}
 
@@ -19,7 +20,7 @@ impl BakedRenderGraph {
 
         let images = self.allocate_images(app, swapchain)?;
 
-        Ok(())
+        Ok(RenderGraphResourceAllocation {})
     }
 
     fn allocate_images(
@@ -67,9 +68,14 @@ impl BakedRenderGraph {
         app: &VkTracerApp,
         images: Vec<(RawImageAllocation, vk::ImageView)>,
     ) -> Result<()> {
-        let render_passes = Vec::with_capacity(self.passes.len());
+        let mut barriers = Vec::new();
+        let mut render_passes = Vec::with_capacity(self.passes.len());
 
         for pass in self.passes.iter() {
+            // Barriers
+            barriers.extend(pass.image_inputs.iter().copied().map(|id| pass.barriers[&id]));
+
+            // Attachments & their refs
             let mut attachments = Vec::new();
 
             attachments.extend(pass.color_attachments.iter().copied().map(|id| {
@@ -87,6 +93,8 @@ impl BakedRenderGraph {
                 )
             }));
 
+            let input_attachments_offset = attachments.len();
+
             attachments.extend(pass.input_attachments.iter().copied().map(|id| {
                 let res = &self.resources[id];
                 let barrier = &pass.barriers[&id];
@@ -102,12 +110,14 @@ impl BakedRenderGraph {
                 )
             }));
 
+            let depth_attachment_offset = attachments.len();
+
             if let Some(id) = pass.depth_attachment {
                 let res = &self.resources[id];
                 let barrier = &pass.barriers[&id];
 
                 attachments.push(get_attachment_description(
-                    res.format
+                    res.format,
                     false,
                     true,
                     true,
@@ -117,31 +127,66 @@ impl BakedRenderGraph {
                 ));
             }
 
-            attachments.extend(pass.image_inputs.iter().copied().map(|id| {
-                let res = &self.resources[id];
-                let barrier = &pass.barriers[&id];
-
-                get_attachment_description(
-                    res.format,
-                    true,
-                    false,
-                    false,
-                    false,
-                    barrier.new_layout,
-                    barrier.new_layout,
+            let color_refs = attachments.iter()
+                .enumerate()
+                .take(pass.color_attachments.len())
+                .map(|(i, desc)| vk::AttachmentReference2::builder()
+                    .attachment(i as _)
+                    .layout(desc.initial_layout)
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .build()
                 )
-            }));
+                .collect::<Box<_>>();
+
+            let input_refs = attachments.iter()
+                .enumerate()
+                .skip(input_attachments_offset)
+                .take(pass.input_attachments.len())
+                .map(|(i, desc)| vk::AttachmentReference2::builder()
+                    .attachment(i as _)
+                    .layout(desc.initial_layout)
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .build()
+                )
+                .collect::<Box<_>>();
+
+            let depth_ref = pass.depth_attachment.map(|desc|
+                {
+                    let desc = &attachments[depth_attachment_offset];
+                    vk::AttachmentReference2::builder()
+                        .attachment(depth_attachment_offset as _)
+                        .layout(desc.initial_layout)
+                        .aspect_mask(vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL)
+                        .build()
+                }
+            );
 
             let subpass = vk::SubpassDescription2::builder()
                 .pipeline_bind_point(match pass.ty {
                     RenderPassType::Graphics => vk::PipelineBindPoint::GRAPHICS,
                     RenderPassType::Compute => vk::PipelineBindPoint::COMPUTE,
                 })
-                .color_attachments(todo!());
+                .color_attachments(&color_refs)
+                .input_attachments(&input_refs);
+
+            let subpass = if let Some(depth) = depth_ref {
+                subpass.depth_stencil_attachment(&depth)
+            } else {
+                subpass
+            };
+
+            vk::SubpassDependency2::builder()
+
 
             unsafe {
                 app.device
-                    .create_render_pass2(&vk::RenderPassCreateInfo2::builder().attachments(&attachments), None);
+                    .create_render_pass2(
+                        &vk::RenderPassCreateInfo2::builder()
+                            .attachments(&attachments)
+                            .subpasses(from_ref(&subpass.build()))
+                        ,
+                     None
+                    );
             }
         }
 

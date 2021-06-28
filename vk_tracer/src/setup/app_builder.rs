@@ -191,11 +191,13 @@ impl VkTracerAppBuilder {
             debug!("Surface complete");
         }
 
+        let synchronization2 = ash::extensions::khr::Synchronization2::new(&instance, &device);
+
         let vma = vk_mem::Allocator::new(&vk_mem::AllocatorCreateInfo {
             physical_device: adapter.handle,
             device: device.clone(),
             instance: instance.clone(),
-            flags: vk_mem::AllocatorCreateFlags::NONE,
+            flags: vk_mem::AllocatorCreateFlags::KHR_DEDICATED_ALLOCATION,
             preferred_large_heap_block_size: 0,
             frame_in_use_count: 0,
             heap_size_limits: None,
@@ -250,6 +252,7 @@ impl VkTracerAppBuilder {
             surface,
             adapter,
             device,
+            synchronization2,
             vma,
             command_pools,
             mesh_storage: SlotMap::with_key(),

@@ -48,8 +48,10 @@ pub mod mem;
 pub mod mesh;
 pub mod present;
 pub mod render;
+// #[cfg(feature = "render_graph")]
+// pub mod render_graph;
 #[cfg(feature = "render_graph")]
-pub mod render_graph;
+pub mod render_graph2;
 pub mod setup;
 pub mod utils;
 
@@ -154,6 +156,7 @@ pub struct VkTracerApp {
     pub(crate) surface: Option<Surface>,
     pub(crate) adapter: Adapter,
     pub(crate) device: ash::Device,
+    pub(crate) synchronization2: ash::extensions::khr::Synchronization2,
     pub(crate) vma: vk_mem::Allocator,
     pub(crate) command_pools: HashMap<QueueType, (vk::Queue, vk::CommandPool)>,
 
@@ -219,6 +222,8 @@ impl Drop for VkTracerApp {
                 mesh.vertices.destroy(&self.vma).unwrap();
                 mesh.indices.destroy(&self.vma).unwrap();
             }
+
+            // synchronization2 has literally nothing to be dropped
 
             self.vma.destroy();
 
