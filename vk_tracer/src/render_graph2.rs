@@ -1,21 +1,53 @@
+mod backing;
 mod builder;
+
+#[derive(Copy, Clone, Debug)]
+pub enum GraphValidationError {
+    NoBackBuffer,
+    InvalidBackBuffer,
+    TagNotRegistered,
+    ColorOrInputAttachmentDifferInSize,
+    InputAndOutputDepthAttachmentsDiffer,
+    LogicalResourceWrittenMoreThanOnce,
+}
 
 #[cfg(test)]
 mod tests {
-    use crate::render_graph2::builder::{RenderGraphBuilder, RenderGraphResource, RenderGraphImageSize, RenderGraphPassResourceBindPoint};
     use crate::ash::vk;
+    use crate::render_graph2::builder::{
+        RenderGraphBuilder, RenderGraphImageFormat, RenderGraphImageSize,
+        RenderGraphPassResourceBindPoint, RenderGraphResource,
+    };
 
     #[test]
     fn test_1() {
         let mut graph_builder = RenderGraphBuilder::new();
 
-        graph_builder.add_resource("Albedo", RenderGraphResource {
-            size: RenderGraphImageSize::SwapchainSized,
-            format: vk::Format::B8G8R8_SRGB,
-        });
+        graph_builder.add_resource(
+            "Albedo",
+            RenderGraphImageSize::BackbufferSized,
+            RenderGraphImageFormat::BackbufferFormat,
+        );
 
-        graph_builder.new_pass("Pass Albedo")
-            .uses("Albedo", RenderGraphPassResourceBindPoint::ColorAttachment, vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .uses("Depth", RenderGraphPassResourceBindPoint::DepthAttachment, vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS);
+        graph_builder.add_resource(
+            "Depth",
+            RenderGraphImageSize::BackbufferSized,
+            RenderGraphImageFormat::DepthStencilOptimal,
+        );
+
+        graph_builder
+            .new_pass("Pass Albedo")
+            .uses(
+                "Albedo",
+                RenderGraphPassResourceBindPoint::ColorAttachment,
+                true,
+            )
+            .uses(
+                "Depth",
+                RenderGraphPassResourceBindPoint::DepthAttachment,
+                true,
+            );
+
+        graph_builder.set_back_buffer("Albedo");
     }
 }

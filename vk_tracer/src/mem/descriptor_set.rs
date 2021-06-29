@@ -1,5 +1,4 @@
 use crate::{
-    ash::version::DeviceV1_0,
     errors::{HandleType, Result},
     DescriptorSetHandle, UboHandle, VkTracerApp,
 };

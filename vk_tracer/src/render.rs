@@ -3,7 +3,7 @@ use crate::{
     errors::{HandleType, Result},
     ForwardPipelineHandle, RendererHandle, SwapchainHandle, VkTracerApp,
 };
-use ash::{version::DeviceV1_0, vk};
+use ash::vk;
 use std::slice::from_ref;
 
 mod forward;

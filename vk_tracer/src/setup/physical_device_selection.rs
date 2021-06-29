@@ -1,6 +1,6 @@
 use std::{collections::HashSet, ffi::CStr};
 
-use ash::{version::InstanceV1_0, vk};
+use ash::vk;
 use log::{debug, error, info};
 
 use crate::{

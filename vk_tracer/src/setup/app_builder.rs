@@ -10,10 +10,7 @@ use crate::{
     utils::str_to_cstr,
     VkTracerApp, VULKAN_VERSION,
 };
-use ash::{
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-    vk,
-};
+use ash::vk;
 use log::debug;
 use raw_window_handle::HasRawWindowHandle;
 use slotmap::SlotMap;

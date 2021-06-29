@@ -3,7 +3,7 @@ use std::{
     slice::from_ref,
 };
 
-use ash::{version::DeviceV1_0, vk, vk::CommandBuffer};
+use ash::vk;
 
 use crate::{
     errors::{HandleType, Result},
@@ -199,7 +199,7 @@ impl VkRecordable for ForwardPipeline {
         &self,
         app: &VkTracerApp,
         viewport: vk::Extent2D,
-        commands: CommandBuffer,
+        commands: vk::CommandBuffer,
     ) -> Result<()> {
         let mesh = storage_access!(app.mesh_storage, self.mesh, HandleType::Mesh);
 

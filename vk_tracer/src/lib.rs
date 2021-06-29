@@ -4,10 +4,7 @@ use crate::{
     render::{ForwardPipeline, Renderer},
     setup::DebugUtils,
 };
-use ash::{
-    version::{DeviceV1_0, InstanceV1_0},
-    vk,
-};
+use ash::vk;
 use present::{Surface, Swapchain};
 use render::{RenderPlan, RenderTarget};
 use setup::Adapter;
@@ -68,7 +65,7 @@ pub const VULKAN_VERSION_STR: &str = "1.2.0";
 
 pub mod errors {
     #[cfg(feature = "render_graph")]
-    use crate::render_graph::GraphValidationError;
+    use crate::render_graph2::GraphValidationError;
     use thiserror::Error;
 
     pub type Result<T> = std::result::Result<T, VkTracerError>;

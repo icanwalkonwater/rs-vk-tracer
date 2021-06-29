@@ -3,7 +3,7 @@ use crate::{
     mem::ImageViewFatHandle,
     RenderPlanHandle, RenderTargetHandle, VkTracerApp,
 };
-use ash::{version::DeviceV1_0, vk};
+use ash::vk;
 
 impl VkTracerApp {
     /// The first attachment must be the color attachment

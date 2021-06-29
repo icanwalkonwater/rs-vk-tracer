@@ -1,5 +1,5 @@
 use crate::{errors::Result, mem::ImageViewFatHandle, RenderPlanHandle, VkTracerApp};
-use ash::{version::DeviceV1_2, vk, vk::ClearColorValue};
+use ash::vk;
 
 impl VkTracerApp {
     pub fn new_render_plan(&mut self) -> RenderPlanBuilder {
@@ -54,7 +54,7 @@ impl RenderPlanBuilder<'_> {
         self.attachments.push(description);
         self.references.push(reference);
         self.clear_values.push(vk::ClearValue {
-            color: ClearColorValue {
+            color: vk::ClearColorValue {
                 float32: Default::default(),
             },
         });

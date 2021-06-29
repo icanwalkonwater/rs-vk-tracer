@@ -4,7 +4,7 @@ use crate::{
     setup::{Adapter, AdapterRequirements},
     SwapchainHandle, VkTracerApp,
 };
-use ash::{version::DeviceV1_0, vk};
+use ash::vk;
 use log::debug;
 
 impl VkTracerApp {

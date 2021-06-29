@@ -4,10 +4,7 @@ use crate::{
     render::{RenderablePipelineHandle, VkRecordable},
     RenderPlanHandle, RenderTargetHandle, RendererHandle, VkTracerApp,
 };
-use ash::{
-    version::{DeviceV1_0, DeviceV1_2},
-    vk,
-};
+use ash::vk;
 
 impl VkTracerApp {
     pub fn new_renderer_from_plan(
