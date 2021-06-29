@@ -1,7 +1,7 @@
 use super::GraphValidationError;
 use crate::errors::{Result, VkTracerError};
 use ash::vk;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 
@@ -171,6 +171,15 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
             ));
         }
 
+        // Warn orphan resources
+        // TODO: warn about orphan passes
+        self.resources
+            .iter()
+            .filter(|(_, res)| res.written_in_pass.is_none() && res.readden_in_pass.is_empty())
+            .for_each(|(tag, _)| {
+                warn!("Resource {:?} is an orphan !", tag);
+            });
+
         // Let every resource know where it will be written to and read from
         // Useful for later on
         for (pass_tag, pass) in self.passes.iter() {
@@ -189,7 +198,7 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
                             .replace(pass_tag)
                         {
                             error!(
-                                "Resource already written in pass {} !",
+                                "Resource already written in pass {:?} !",
                                 previously_written_in
                             );
                             return Err(VkTracerError::InvalidRenderGraph(
