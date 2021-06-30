@@ -87,14 +87,14 @@ impl VkTracerAppBuilder {
                 .application_name(&app_name)
                 .application_version({
                     let (major, minor, patch) = self.version;
-                    vk::make_version(major, minor, patch)
+                    vk::make_api_version(0, major, minor, patch)
                 })
                 .engine_name(str_to_cstr("VK Tracer\0"))
                 .engine_version({
                     let major = env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap();
                     let minor = env!("CARGO_PKG_VERSION_MINOR").parse().unwrap();
                     let patch = env!("CARGO_PKG_VERSION_PATCH").parse().unwrap();
-                    vk::make_version(major, minor, patch)
+                    vk::make_api_version(0, major, minor, patch)
                 })
                 .api_version(VULKAN_VERSION);
 

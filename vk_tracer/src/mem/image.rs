@@ -77,7 +77,7 @@ impl VkTracerApp {
 
 /// Needs to be kept in sync with [has_stencil].
 #[inline]
-fn find_depth_format(app: &VkTracerApp) -> Result<vk::Format> {
+pub(crate) fn find_depth_format(app: &VkTracerApp) -> Result<vk::Format> {
     find_supported_format(
         app,
         [

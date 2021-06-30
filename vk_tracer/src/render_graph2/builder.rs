@@ -15,14 +15,14 @@ pub struct FrozenRenderGraph<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag>
     pub(crate) RenderGraphBuilder<R, P>,
 );
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct RenderGraphBuilder<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> {
     pub(crate) back_buffer_tag: Option<R>,
     pub(crate) resources: HashMap<R, RenderGraphResource<P>>,
     pub(crate) passes: HashMap<P, RenderGraphBuilderPass<R>>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct RenderGraphBuilderPass<R: RenderGraphLogicalTag> {
     // TODO: add callback to check if the pass should really be included
     pub(crate) resources: HashMap<R, RenderGraphPassResource>,
@@ -37,7 +37,7 @@ pub struct RenderGraphResource<P: RenderGraphLogicalTag> {
     pub(crate) readden_in_pass: Vec<P>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum RenderGraphImageSize {
     BackbufferSized,
     /// To restrict the actual dimensions of the image, **set the unused dimensions to 0, NOT 1**.
@@ -45,6 +45,7 @@ pub enum RenderGraphImageSize {
 }
 
 // TODO: Add more formats
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum RenderGraphImageFormat {
     BackbufferFormat,
     ColorRgba8Unorm,
@@ -56,10 +57,9 @@ pub enum RenderGraphImageFormat {
 pub struct RenderGraphPassResource {
     pub(crate) bind_point: RenderGraphPassResourceBindPoint,
     pub(crate) used_in: vk::PipelineStageFlags2KHR,
-    pub(crate) persistent: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RenderGraphPassResourceBindPoint {
     ColorAttachment,
     DepthAttachment,
@@ -68,17 +68,38 @@ pub enum RenderGraphPassResourceBindPoint {
 
 impl RenderGraphPassResourceBindPoint {
     #[inline]
-    pub(crate) fn is_read_only(&self) -> bool {
+    pub(crate) fn optimal_layout(&self) -> vk::ImageLayout {
         match self {
-            Self::ColorAttachment | Self::DepthAttachment => false,
-            _ => true,
+            Self::ColorAttachment => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            Self::DepthAttachment => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            Self::Sampler => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn can_write(&self) -> bool {
+        match self {
+            Self::ColorAttachment | Self::DepthAttachment => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn can_read(&self) -> bool {
+        match self {
+            Self::DepthAttachment | Self::Sampler => true,
+            _ => false,
         }
     }
 }
 
 impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P> {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            back_buffer_tag: None,
+            resources: Default::default(),
+            passes: Default::default(),
+        }
     }
 
     pub fn add_resource(
@@ -102,13 +123,12 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
 
     pub fn new_pass(&mut self, tag: P) -> &mut RenderGraphBuilderPass<R> {
         // TODO: warn if already present
-        self.passes.insert(tag, Default::default());
-        self.passes.get_mut(tag).unwrap()
+        self.passes.insert(tag, RenderGraphBuilderPass { resources: Default::default() });
+        self.passes.get_mut(&tag).unwrap()
     }
 
-    pub fn set_back_buffer(&mut self, tag: P) -> &mut RenderGraphBuilderPass<R> {
+    pub fn set_back_buffer(&mut self, tag: R) {
         self.back_buffer_tag = Some(tag);
-        self
     }
 
     pub(crate) fn get_back_buffer(&self) -> R {
@@ -121,7 +141,6 @@ impl<R: RenderGraphLogicalTag> RenderGraphBuilderPass<R> {
         &mut self,
         tag: R,
         bind_point: RenderGraphPassResourceBindPoint,
-        persistent: bool,
     ) -> &mut Self {
         let used_in = match bind_point {
             RenderGraphPassResourceBindPoint::ColorAttachment => {
@@ -141,7 +160,6 @@ impl<R: RenderGraphLogicalTag> RenderGraphBuilderPass<R> {
             RenderGraphPassResource {
                 bind_point,
                 used_in,
-                persistent,
             },
         );
         self
@@ -163,9 +181,14 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
         }
 
         // Check for obvious problems with the back buffer
-        if self.resources[self.get_back_buffer()].format == RenderGraphImageFormat::BackbufferFormat
+        if self.resources[&self.get_back_buffer()].format == RenderGraphImageFormat::BackbufferFormat
         {
             error!("The back buffer can't be in the same format that the back buffer.");
+            return Err(VkTracerError::InvalidRenderGraph(
+                GraphValidationError::InvalidBackBuffer,
+            ));
+        } else if self.resources[&self.get_back_buffer()].written_in_pass.is_none() {
+            error!("The back buffer is never written to !");
             return Err(VkTracerError::InvalidRenderGraph(
                 GraphValidationError::InvalidBackBuffer,
             ));
@@ -182,7 +205,7 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
 
         // Let every resource know where it will be written to and read from
         // Useful for later on
-        for (pass_tag, pass) in self.passes.iter() {
+        for (&pass_tag, pass) in self.passes.iter() {
             for (res_tag, res) in pass.resources.iter() {
                 match res.bind_point {
                     // Bind points that write and maybe read
@@ -193,7 +216,7 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
                         if let Some(previously_written_in) = self
                             .resources
                             .get_mut(res_tag)
-                            .ok_or(GraphValidationError::TagNotRegistered)?
+                            .ok_or(VkTracerError::InvalidRenderGraph(GraphValidationError::TagNotRegistered))?
                             .written_in_pass
                             .replace(pass_tag)
                         {

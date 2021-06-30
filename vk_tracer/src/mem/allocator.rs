@@ -108,10 +108,10 @@ impl RawBufferAllocation {
         mapped_slice.copy_from_slice(data);
 
         // Will be ignored if HOST_COHERENT
-        vma.flush_allocation(&self.allocation, 0, size as usize)?;
+        vma.flush_allocation(&self.allocation, 0, size as usize);
 
         if need_to_unmap {
-            vma.unmap_memory(&self.allocation)?;
+            vma.unmap_memory(&self.allocation);
         }
 
         Ok(())
@@ -168,7 +168,7 @@ impl RawBufferAllocation {
     }
 
     pub(crate) fn destroy(self, vma: &vk_mem::Allocator) -> Result<()> {
-        vma.destroy_buffer(self.buffer, &self.allocation)?;
+        vma.destroy_buffer(self.buffer, &self.allocation);
         Ok(())
     }
 }

@@ -145,10 +145,11 @@ fn process_physical_device(
         debug!(" Checking Vulkan version...");
 
         let device_version = info.properties.api_version;
-        let major = vk::version_major(device_version);
-        let minor = vk::version_minor(device_version);
-        let patch = vk::version_patch(device_version);
-        let device_version_str = format!("{}.{}.{}", major, minor, patch);
+        let variant = vk::api_version_variant(device_version);
+        let major = vk::api_version_major(device_version);
+        let minor = vk::api_version_minor(device_version);
+        let patch = vk::api_version_patch(device_version);
+        let device_version_str = format!("{}.{}.{}.{}", variant, major, minor, patch);
 
         if device_version >= VULKAN_VERSION {
             debug!("  Detected Vulkan {} [OK]", device_version_str);
