@@ -56,7 +56,6 @@ pub enum RenderGraphImageFormat {
 #[derive(Debug)]
 pub struct RenderGraphPassResource {
     pub(crate) bind_point: RenderGraphPassResourceBindPoint,
-    pub(crate) used_in: vk::PipelineStageFlags2KHR,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -73,6 +72,33 @@ impl RenderGraphPassResourceBindPoint {
             Self::ColorAttachment => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             Self::DepthAttachment => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             Self::Sampler => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn stages(&self) -> vk::PipelineStageFlags2KHR {
+        match self {
+            Self::ColorAttachment => vk::PipelineStageFlags2KHR::COLOR_ATTACHMENT_OUTPUT,
+            Self::DepthAttachment => {
+                vk::PipelineStageFlags2KHR::EARLY_FRAGMENT_TESTS
+                    | vk::PipelineStageFlags2KHR::LATE_FRAGMENT_TESTS
+            }
+            Self::Sampler => vk::PipelineStageFlags2KHR::FRAGMENT_SHADER,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn accesses(&self) -> vk::AccessFlags2KHR {
+        match self {
+            Self::ColorAttachment => {
+                vk::AccessFlags2KHR::COLOR_ATTACHMENT_READ
+                    | vk::AccessFlags2KHR::COLOR_ATTACHMENT_WRITE
+            }
+            Self::DepthAttachment => {
+                vk::AccessFlags2KHR::DEPTH_STENCIL_ATTACHMENT_READ
+                    | vk::AccessFlags2KHR::DEPTH_STENCIL_ATTACHMENT_WRITE
+            }
+            Self::Sampler => vk::AccessFlags2KHR::SHADER_READ,
         }
     }
 
@@ -123,7 +149,12 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
 
     pub fn new_pass(&mut self, tag: P) -> &mut RenderGraphBuilderPass<R> {
         // TODO: warn if already present
-        self.passes.insert(tag, RenderGraphBuilderPass { resources: Default::default() });
+        self.passes.insert(
+            tag,
+            RenderGraphBuilderPass {
+                resources: Default::default(),
+            },
+        );
         self.passes.get_mut(&tag).unwrap()
     }
 
@@ -137,31 +168,9 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
 }
 
 impl<R: RenderGraphLogicalTag> RenderGraphBuilderPass<R> {
-    pub fn uses(
-        &mut self,
-        tag: R,
-        bind_point: RenderGraphPassResourceBindPoint,
-    ) -> &mut Self {
-        let used_in = match bind_point {
-            RenderGraphPassResourceBindPoint::ColorAttachment => {
-                vk::PipelineStageFlags2KHR::COLOR_ATTACHMENT_OUTPUT
-            }
-            RenderGraphPassResourceBindPoint::DepthAttachment => {
-                vk::PipelineStageFlags2KHR::EARLY_FRAGMENT_TESTS
-                    | vk::PipelineStageFlags2KHR::LATE_FRAGMENT_TESTS
-            }
-            RenderGraphPassResourceBindPoint::Sampler => {
-                vk::PipelineStageFlags2KHR::FRAGMENT_SHADER
-            }
-        };
-
-        self.resources.insert(
-            tag,
-            RenderGraphPassResource {
-                bind_point,
-                used_in,
-            },
-        );
+    pub fn uses(&mut self, tag: R, bind_point: RenderGraphPassResourceBindPoint) -> &mut Self {
+        self.resources
+            .insert(tag, RenderGraphPassResource { bind_point });
         self
     }
 }
@@ -180,20 +189,6 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
             ));
         }
 
-        // Check for obvious problems with the back buffer
-        if self.resources[&self.get_back_buffer()].format == RenderGraphImageFormat::BackbufferFormat
-        {
-            error!("The back buffer can't be in the same format that the back buffer.");
-            return Err(VkTracerError::InvalidRenderGraph(
-                GraphValidationError::InvalidBackBuffer,
-            ));
-        } else if self.resources[&self.get_back_buffer()].written_in_pass.is_none() {
-            error!("The back buffer is never written to !");
-            return Err(VkTracerError::InvalidRenderGraph(
-                GraphValidationError::InvalidBackBuffer,
-            ));
-        }
-
         // Warn orphan resources
         // TODO: warn about orphan passes
         self.resources
@@ -207,38 +202,48 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
         // Useful for later on
         for (&pass_tag, pass) in self.passes.iter() {
             for (res_tag, res) in pass.resources.iter() {
-                match res.bind_point {
-                    // Bind points that write and maybe read
-                    // There can only be one per logical resource, otherwise we can't tell which to
-                    // schedule first
-                    RenderGraphPassResourceBindPoint::ColorAttachment
-                    | RenderGraphPassResourceBindPoint::DepthAttachment => {
-                        if let Some(previously_written_in) = self
-                            .resources
-                            .get_mut(res_tag)
-                            .ok_or(VkTracerError::InvalidRenderGraph(GraphValidationError::TagNotRegistered))?
-                            .written_in_pass
-                            .replace(pass_tag)
-                        {
-                            error!(
-                                "Resource already written in pass {:?} !",
-                                previously_written_in
-                            );
-                            return Err(VkTracerError::InvalidRenderGraph(
-                                GraphValidationError::LogicalResourceWrittenMoreThanOnce,
-                            ));
-                        }
-                    }
-                    // Bind points that only read
-                    RenderGraphPassResourceBindPoint::Sampler => {
-                        self.resources
-                            .get_mut(res_tag)
-                            .unwrap()
-                            .readden_in_pass
-                            .push(pass_tag);
+
+                // Bind points that write and maybe read
+                // There can only be one per logical resource, otherwise we can't tell which to
+                // schedule first
+                if res.bind_point.can_write() {
+                    if let Some(previously_written_in) = self
+                        .resources
+                        .get_mut(res_tag)
+                        .ok_or(VkTracerError::InvalidRenderGraph(
+                            GraphValidationError::TagNotRegistered,
+                        ))?
+                        .written_in_pass
+                        .replace(pass_tag)
+                    {
+                        error!(
+                            "Resource already written in pass {:?} !",
+                            previously_written_in
+                        );
+                        return Err(VkTracerError::InvalidRenderGraph(
+                            GraphValidationError::LogicalResourceWrittenMoreThanOnce,
+                        ));
                     }
                 }
+
+                if res.bind_point.can_read() {
+                    self.resources
+                        .get_mut(res_tag)
+                        .unwrap()
+                        .readden_in_pass
+                        .push(pass_tag);
+                }
             }
+        }
+
+        if self.resources[&self.get_back_buffer()]
+            .written_in_pass
+            .is_none()
+        {
+            error!("The back buffer is never written to !");
+            return Err(VkTracerError::InvalidRenderGraph(
+                GraphValidationError::InvalidBackBuffer,
+            ));
         }
 
         Ok(FrozenRenderGraph(self))

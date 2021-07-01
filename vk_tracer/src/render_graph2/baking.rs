@@ -1,11 +1,15 @@
 use crate::errors::Result;
-use crate::render_graph2::builder::{FrozenRenderGraph, RenderGraphBuilder, RenderGraphLogicalTag, RenderGraphPassResourceBindPoint, RenderGraphImageSize, RenderGraphImageFormat, RenderGraphResource, RenderGraphPassResource};
+use crate::mem::find_depth_format;
+use crate::render_graph2::builder::{
+    FrozenRenderGraph, RenderGraphBuilder, RenderGraphImageFormat, RenderGraphImageSize,
+    RenderGraphLogicalTag, RenderGraphPassResource, RenderGraphPassResourceBindPoint,
+    RenderGraphResource,
+};
+use crate::VkTracerApp;
 use ash::vk;
 use indexmap::IndexSet;
 use multimap::MultiMap;
 use std::collections::{HashMap, VecDeque};
-use crate::mem::find_depth_format;
-use crate::VkTracerApp;
 
 type PhysicalResourceIndex = usize;
 type PhysicalPassIndex = usize;
@@ -30,6 +34,19 @@ pub enum BakedRenderGraphResource {
     },
 }
 
+#[derive(Debug)]
+pub enum BakedRenderGraphPassBarrier {
+    Image {
+        src_stage: vk::PipelineStageFlags2KHR,
+        src_access: vk::AccessFlags2KHR,
+        dst_stage: vk::PipelineStageFlags2KHR,
+        dst_access: vk::AccessFlags2KHR,
+        old_layout: vk::ImageLayout,
+        new_layout: vk::ImageLayout,
+    },
+}
+
+#[derive(Debug)]
 enum ResourceState<R: RenderGraphLogicalTag> {
     Image {
         physical: PhysicalResourceIndex,
@@ -39,10 +56,11 @@ enum ResourceState<R: RenderGraphLogicalTag> {
         current_layout: vk::ImageLayout,
 
         // Past information
-        last_used_in_stage: vk::PipelineStageFlags2KHR,
-        is_being_written: bool,
+        last_stage: vk::PipelineStageFlags2KHR,
+        last_access: vk::AccessFlags2KHR,
+        write_pending: bool,
         // I don't care about your opinion
-        is_being_readden: bool,
+        read_pending: bool,
 
         // Future information (in order)
         future_actions: Vec<FutureResourceUsage>,
@@ -67,17 +85,162 @@ impl FutureResourceUsage {
 
 impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> {
     pub fn bake(graph: &FrozenRenderGraph<R, P>) -> Result<Self> {
+
+        #[cfg(feature = "debug_render_graph")]
+        use std::io::Write;
+        #[cfg(feature = "debug_render_graph")]
+        let mut timeline_barriers = std::fs::File::create(option_env!("DEBUG_GRAPH_TIMELINE_BARRIER").unwrap_or("./render_graph_timeline_barrier.mmd")).unwrap();
+        #[cfg(feature = "debug_render_graph")]
+        {
+            writeln!(timeline_barriers, "gantt");
+            writeln!(timeline_barriers, " title Baked Render Graph");
+            writeln!(timeline_barriers, " dateFormat X");
+        }
+        #[cfg(feature = "debug_render_graph")]
+        let mut current_time = 0;
+
+        #[cfg(feature = "debug_render_graph")]
+        let mut section_resources_layout = multimap::MultiMap::new();
+        #[cfg(feature = "debug_render_graph")]
+        let mut section_passes = Vec::new();
+
         let graph = &graph.0;
 
+        // Schedule passes by following the graph in reverse order
         let schedule = Self::schedule_passes(graph);
         let (resources, resource_mapping) = Self::create_physical_resources_and_mapping(graph);
-        let resource_states = Self::init_resource_state(graph, &schedule, &resources, &resource_mapping);
+        let mut resource_states =
+            Self::init_resource_state(graph, &schedule, &resources, &resource_mapping);
+
+        #[cfg(feature = "debug_render_graph")]
+        {
+            for state in &resource_states {
+                match state {
+                    ResourceState::Image {
+                        physical,
+                        current_layout,
+                        ..
+                    } => {
+                        section_resources_layout.insert(physical, (format!("Layout: {:?}", current_layout), current_time));
+                    }
+                }
+            }
+        }
+
+        // Now simulate the execution of this graph and add barriers when it is appropriate
+        for (pass_physical, pass_tag) in schedule.into_iter().enumerate() {
+            let pass = &graph.passes[&pass_tag];
+
+            let mut barriers = Vec::new();
+
+            #[cfg(feature = "debug_render_graph")]
+            let mut debug_barriers = Vec::new();
+
+            for (res_tag, res) in pass.resources.iter() {
+                let res_state = &mut resource_states[resource_mapping[res_tag]];
+
+                match res_state {
+                    ResourceState::Image {
+                        physical,
+                        current_logical,
+                        write_pending,
+                        read_pending,
+                        current_layout,
+                        last_stage,
+                        last_access,
+                        ..
+                    } => {
+                        // Update tag right away
+                        *current_logical = Some(*res_tag);
+
+                        let need_barrier =
+                            // Read-After-Write hazards
+                            (res.bind_point.can_read() && *write_pending)
+                                // Write-After-Read hazards
+                                || (res.bind_point.can_write() && *read_pending)
+                                // Just a layout transition
+                                || (res.bind_point.optimal_layout() != *current_layout);
+
+                        if need_barrier {
+                            let barrier = BakedRenderGraphPassBarrier::Image {
+                                src_stage: *last_stage,
+                                src_access: *last_access,
+                                dst_stage: res.bind_point.stages(),
+                                dst_access: res.bind_point.accesses(),
+                                old_layout: *current_layout,
+                                new_layout: res.bind_point.optimal_layout(),
+                            };
+
+                            barriers.push(barrier);
+
+                            #[cfg(feature = "debug_render_graph")]
+                            {
+                                let mut debug_barrier = format!("{}", current_logical.unwrap());
+
+                                if res.bind_point.can_read() && *write_pending {
+                                    debug_barrier.push_str(" [Invalidate]");
+                                }
+                                if res.bind_point.can_write() && *read_pending {
+                                    debug_barrier.push_str(" [Write-After-Read prevent]");
+                                }
+                                if res.bind_point.optimal_layout() != *current_layout {
+                                    debug_barrier.push_str(" [Layout Transition]");
+
+                                }
+                                debug_barriers.push(debug_barrier);
+                            }
+
+                            // Reflect the barrier on the state of the resource
+                            *write_pending = false;
+                            *read_pending = false;
+                            // If the layout need to change, we will reach this line, so no need to
+                            // specify it outside too
+                            *current_layout = res.bind_point.optimal_layout();
+                            *last_stage = vk::PipelineStageFlags2KHR::NONE;
+                            *last_access = vk::AccessFlags2KHR::NONE;
+                        }
+
+                        // Advance the resource state
+                        if res.bind_point.can_write() {
+                            *write_pending = true;
+                        }
+                        if res.bind_point.can_read() {
+                            *read_pending = true;
+                        }
+                        *last_stage |= res.bind_point.stages();
+                        *last_access |= res.bind_point.accesses();
+                    }
+                }
+            }
+
+            #[cfg(feature = "debug_render_graph")]
+            {
+                for (i, barrier) in debug_barriers.iter().enumerate() {
+                    section_passes.push(format!(" {} :crit, barrier_{}_{}, {}, 1s", barrier, pass_physical, i, current_time));
+                }
+                if !debug_barriers.is_empty() {
+                    current_time += 1;
+                }
+                section_passes.push(format!(" {} :pass_{}, {}, 10s", pass_tag, pass_physical, current_time));
+                current_time += 10;
+            }
+        }
+
+        #[cfg(feature = "debug_render_graph")]
+        {
+            writeln!(timeline_barriers, " section Passes");
+            for pass in section_passes {
+                writeln!(timeline_barriers, "{}", pass);
+            }
+        }
 
         todo!()
     }
 
     fn schedule_passes(graph: &RenderGraphBuilder<R, P>) -> Vec<P> {
-        let mut to_schedule_passes = vec![graph.resources[&graph.get_back_buffer()].written_in_pass.unwrap()];
+        let mut to_schedule_passes = vec![graph.resources[&graph.get_back_buffer()]
+            .written_in_pass
+            .unwrap()];
         // The order is reversed, the first ones to be added will be scheduled last
         let mut schedule = IndexSet::new();
 
@@ -94,12 +257,15 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
             // Now schedule the dependencies after this pass
             for (res_tag, res) in &pass.resources {
                 if let Some(dependant_pass) = graph.resources[res_tag].written_in_pass {
-                    to_schedule_passes.push(dependant_pass);
+                    if dependant_pass != pass_tag {
+                        to_schedule_passes.push(dependant_pass);
+                    }
                 }
             }
         }
 
-        schedule.iter().copied().collect()
+        // Reverse so the first one to be scheduled come first
+        schedule.iter().copied().rev().collect()
     }
 
     fn create_physical_resources_and_mapping(
@@ -132,9 +298,14 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
         let mut resource_states = Vec::with_capacity(resources.len());
 
         for (res_physical, res) in resources.iter().enumerate() {
-            let aliases = mappings.iter().filter(|(_, id)| res_physical == **id).map(|(tag, _)| *tag).collect::<Box<[_]>>();
+            let aliases = mappings
+                .iter()
+                .filter(|(_, id)| res_physical == **id)
+                .map(|(tag, _)| *tag)
+                .collect::<Box<[_]>>();
 
-            let (future_actions, initial_layout) = Self::predict_future_of_resource(graph, schedule, &aliases);
+            let (future_actions, initial_layout) =
+                Self::predict_future_of_resource(graph, schedule, &aliases);
             debug_assert!(!future_actions.is_empty());
 
             // Assume that the resource isn't being used before
@@ -143,9 +314,10 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
                 physical: res_physical,
                 current_logical: None,
                 current_layout: initial_layout,
-                last_used_in_stage: vk::PipelineStageFlags2KHR::NONE,
-                is_being_written: false,
-                is_being_readden: false,
+                last_stage: vk::PipelineStageFlags2KHR::NONE,
+                last_access: vk::AccessFlags2KHR::NONE,
+                write_pending: false,
+                read_pending: false,
                 future_actions,
             })
         }
@@ -153,7 +325,11 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
         resource_states
     }
 
-    fn predict_future_of_resource(graph: &RenderGraphBuilder<R, P>, schedule: &[P], resource_aliases: &[R]) -> (Vec<FutureResourceUsage>, vk::ImageLayout) {
+    fn predict_future_of_resource(
+        graph: &RenderGraphBuilder<R, P>,
+        schedule: &[P],
+        resource_aliases: &[R],
+    ) -> (Vec<FutureResourceUsage>, vk::ImageLayout) {
         let mut usages = Vec::new();
 
         let find_alias_macro = |resources: &HashMap<R, RenderGraphPassResource>| {
