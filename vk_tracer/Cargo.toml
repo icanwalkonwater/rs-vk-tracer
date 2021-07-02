@@ -25,6 +25,7 @@ slotmap = "^1.0"
 parking_lot = "^0.11"
 indexmap = { version = "^1.6", optional = true }
 multimap = { version = "^0.8", optional = true }
+itertools = "^0.10"
 
 # 3D stuff
 ash = "=0.32.0"

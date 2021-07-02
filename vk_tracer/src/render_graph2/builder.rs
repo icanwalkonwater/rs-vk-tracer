@@ -37,7 +37,7 @@ pub struct RenderGraphResource<P: RenderGraphLogicalTag> {
     pub(crate) readden_in_pass: Vec<P>,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RenderGraphImageSize {
     BackbufferSized,
     /// To restrict the actual dimensions of the image, **set the unused dimensions to 0, NOT 1**.
@@ -45,7 +45,7 @@ pub enum RenderGraphImageSize {
 }
 
 // TODO: Add more formats
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RenderGraphImageFormat {
     BackbufferFormat,
     ColorRgba8Unorm,
@@ -61,6 +61,7 @@ pub struct RenderGraphPassResource {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RenderGraphPassResourceBindPoint {
     ColorAttachment,
+    InputAttachment,
     DepthAttachment,
     Sampler,
 }
@@ -71,7 +72,7 @@ impl RenderGraphPassResourceBindPoint {
         match self {
             Self::ColorAttachment => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             Self::DepthAttachment => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            Self::Sampler => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            Self::InputAttachment | Self::Sampler => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
         }
     }
 
@@ -83,7 +84,7 @@ impl RenderGraphPassResourceBindPoint {
                 vk::PipelineStageFlags2KHR::EARLY_FRAGMENT_TESTS
                     | vk::PipelineStageFlags2KHR::LATE_FRAGMENT_TESTS
             }
-            Self::Sampler => vk::PipelineStageFlags2KHR::FRAGMENT_SHADER,
+            Self::InputAttachment | Self::Sampler => vk::PipelineStageFlags2KHR::FRAGMENT_SHADER,
         }
     }
 
@@ -94,6 +95,7 @@ impl RenderGraphPassResourceBindPoint {
                 vk::AccessFlags2KHR::COLOR_ATTACHMENT_READ
                     | vk::AccessFlags2KHR::COLOR_ATTACHMENT_WRITE
             }
+            Self::InputAttachment => vk::AccessFlags2KHR::INPUT_ATTACHMENT_READ,
             Self::DepthAttachment => {
                 vk::AccessFlags2KHR::DEPTH_STENCIL_ATTACHMENT_READ
                     | vk::AccessFlags2KHR::DEPTH_STENCIL_ATTACHMENT_WRITE
@@ -113,7 +115,7 @@ impl RenderGraphPassResourceBindPoint {
     #[inline]
     pub(crate) fn can_read(&self) -> bool {
         match self {
-            Self::DepthAttachment | Self::Sampler => true,
+            Self::DepthAttachment | Self::InputAttachment | Self::Sampler => true,
             _ => false,
         }
     }

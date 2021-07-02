@@ -8,6 +8,7 @@ use crate::render_graph2::builder::{
 use crate::VkTracerApp;
 use ash::vk;
 use indexmap::IndexSet;
+use itertools::Itertools;
 use multimap::MultiMap;
 use std::collections::{HashMap, VecDeque};
 
@@ -85,16 +86,20 @@ impl FutureResourceUsage {
 
 impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> {
     pub fn bake(graph: &FrozenRenderGraph<R, P>) -> Result<Self> {
-
         #[cfg(feature = "debug_render_graph")]
         use std::io::Write;
         #[cfg(feature = "debug_render_graph")]
-        let mut timeline_barriers = std::fs::File::create(option_env!("DEBUG_GRAPH_TIMELINE_BARRIER").unwrap_or("./render_graph_timeline_barrier.mmd")).unwrap();
+        let mut timeline_barriers = std::fs::File::create(
+            option_env!("DEBUG_GRAPH_TIMELINE_BARRIER")
+                .unwrap_or("./render_graph_timeline_barrier.mmd"),
+        )
+        .unwrap();
         #[cfg(feature = "debug_render_graph")]
         {
             writeln!(timeline_barriers, "gantt");
             writeln!(timeline_barriers, " title Baked Render Graph");
             writeln!(timeline_barriers, " dateFormat X");
+            writeln!(timeline_barriers, " axisFormat %S");
         }
         #[cfg(feature = "debug_render_graph")]
         let mut current_time = 0;
@@ -102,30 +107,18 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
         #[cfg(feature = "debug_render_graph")]
         let mut section_resources_layout = multimap::MultiMap::new();
         #[cfg(feature = "debug_render_graph")]
+        let mut section_resources_name = multimap::MultiMap::new();
+        #[cfg(feature = "debug_render_graph")]
         let mut section_passes = Vec::new();
 
         let graph = &graph.0;
 
         // Schedule passes by following the graph in reverse order
         let schedule = Self::schedule_passes(graph);
-        let (resources, resource_mapping) = Self::create_physical_resources_and_mapping(graph);
+        let (resources, resource_mapping) =
+            Self::create_physical_resources_and_mapping(graph, &schedule);
         let mut resource_states =
             Self::init_resource_state(graph, &schedule, &resources, &resource_mapping);
-
-        #[cfg(feature = "debug_render_graph")]
-        {
-            for state in &resource_states {
-                match state {
-                    ResourceState::Image {
-                        physical,
-                        current_layout,
-                        ..
-                    } => {
-                        section_resources_layout.insert(physical, (format!("Layout: {:?}", current_layout), current_time));
-                    }
-                }
-            }
-        }
 
         // Now simulate the execution of this graph and add barriers when it is appropriate
         for (pass_physical, pass_tag) in schedule.into_iter().enumerate() {
@@ -185,7 +178,6 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
                                 }
                                 if res.bind_point.optimal_layout() != *current_layout {
                                     debug_barrier.push_str(" [Layout Transition]");
-
                                 }
                                 debug_barriers.push(debug_barrier);
                             }
@@ -215,19 +207,106 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
 
             #[cfg(feature = "debug_render_graph")]
             {
+                for state in &resource_states {
+                    match state {
+                        ResourceState::Image {
+                            physical,
+                            current_logical,
+                            current_layout,
+                            ..
+                        } => {
+                            section_resources_layout
+                                .insert(*physical, format!("Layout {:?}", *current_layout));
+                            section_resources_name.insert(
+                                *physical,
+                                current_logical
+                                    .map_or_else(|| String::from("None"), |r| format!("{}", r)),
+                            );
+                        }
+                    }
+                }
+
                 for (i, barrier) in debug_barriers.iter().enumerate() {
-                    section_passes.push(format!(" {} :crit, barrier_{}_{}, {}, 1s", barrier, pass_physical, i, current_time));
+                    section_passes.push(format!(
+                        " {} :crit, barrier_{}_{}, {}, 1s",
+                        barrier, pass_physical, i, current_time
+                    ));
                 }
-                if !debug_barriers.is_empty() {
-                    current_time += 1;
-                }
-                section_passes.push(format!(" {} :pass_{}, {}, 10s", pass_tag, pass_physical, current_time));
+                section_passes.push(format!(
+                    " {} :pass_{}, {}, 10s",
+                    pass_tag, pass_physical, current_time
+                ));
                 current_time += 10;
             }
         }
 
         #[cfg(feature = "debug_render_graph")]
         {
+            use itertools::Itertools;
+            for (res, layouts) in section_resources_layout.iter_all().sorted_by_key(|x| *x.0) {
+                writeln!(timeline_barriers, " section Res {} names", res);
+                {
+                    let names = section_resources_name.get_vec(&res).unwrap();
+                    let mut prev_name_time = 0;
+                    let mut prev_name = &names[0];
+
+                    for (i, name) in names
+                        .iter()
+                        .enumerate()
+                        .skip(1)
+                        .chain(std::iter::once((names.len(), &String::new())))
+                    {
+                        if prev_name != name {
+                            if prev_name != "None" {
+                                writeln!(
+                                    timeline_barriers,
+                                    " {} :done, name_{}_{}, {}, {}s",
+                                    prev_name,
+                                    res,
+                                    prev_name_time,
+                                    prev_name_time * 10,
+                                    (i - prev_name_time) * 10
+                                );
+                            }
+                            prev_name_time = i;
+                            prev_name = name;
+                        }
+                    }
+                }
+
+                writeln!(timeline_barriers, " section Res {} layouts", res);
+                {
+                    let mut prev_layout_time = 0;
+                    let mut prev_layout = &layouts[0];
+
+                    for (i, layout) in layouts
+                        .iter()
+                        .enumerate()
+                        .skip(1)
+                        .chain(std::iter::once((layouts.len(), &String::new())))
+                    {
+                        if prev_layout != layout {
+                            writeln!(
+                                timeline_barriers,
+                                " {} :active, layout_{}_{}, {}, {}s",
+                                prev_layout,
+                                res,
+                                prev_layout_time,
+                                prev_layout_time * 10,
+                                (i - prev_layout_time) * 10
+                            );
+                            prev_layout_time = i;
+                            prev_layout = layout;
+                        }
+                    }
+                }
+
+                writeln!(timeline_barriers, " section Sep{}", res);
+                for i in 0..2 {
+                    writeln!(timeline_barriers, " _ :separator_{}_{}, 0, 0s", res, i);
+                }
+            }
+
             writeln!(timeline_barriers, " section Passes");
             for pass in section_passes {
                 writeln!(timeline_barriers, "{}", pass);
@@ -270,12 +349,60 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
 
     fn create_physical_resources_and_mapping(
         graph: &RenderGraphBuilder<R, P>,
+        schedule: &[P],
     ) -> (
         Vec<BakedRenderGraphResource>,
         HashMap<R, PhysicalResourceIndex>,
     ) {
         let mut resources = Vec::with_capacity(graph.resources.len());
         let mut mapping = HashMap::with_capacity(graph.resources.len());
+
+        // Compute logical to physical passes mapping for convenience
+        let pass_mapping = schedule
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(i, p)| (p, i))
+            .collect::<HashMap<_, _>>();
+
+        // Put resources with the same size and format to the same bucket
+        let mut potential_aliases = multimap::MultiMap::new();
+        for (tag, res) in &graph.resources {
+            potential_aliases.insert((res.size, res.format), *tag);
+        }
+
+        for ((size, format), aliases) in potential_aliases.iter_all() {
+            // Easy case
+            if aliases.len() == 1 {
+                resources.push(BakedRenderGraphResource::Image {
+                    size: res.size,
+                    format: res.format,
+                });
+                mapping.insert(tag, resources.len() - 1);
+                continue;
+            }
+
+            // Compute lifetimes
+            let lifetimes = aliases
+                .iter()
+                .map(|tag| {
+                    let res = &graph.resources[tag];
+                    let (first_use, last_use) = res
+                        .readden_in_pass
+                        .iter()
+                        .chain(res.written_in_pass)
+                        .map(|tag| pass_mapping[tag])
+                        .minmax()
+                        .into_option()
+                        // We checked that there are no orphan resources
+                        .unwrap();
+
+                    first_use..=last_use
+                })
+                .collect::<Vec<_>>();
+
+            todo!()
+        }
 
         // TODO: resource aliasing
         for (&tag, res) in &graph.resources {

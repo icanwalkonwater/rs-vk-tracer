@@ -58,10 +58,25 @@ mod tests {
         graph_builder.add_resource(
             "Albedo",
             RenderGraphImageSize::BackbufferSized,
-            RenderGraphImageFormat::BackbufferFormat,
+            RenderGraphImageFormat::ColorRgba8Unorm,
         );
         graph_builder.add_resource(
             "Depth",
+            RenderGraphImageSize::BackbufferSized,
+            RenderGraphImageFormat::DepthStencilOptimal,
+        );
+        graph_builder.add_resource(
+            "Position",
+            RenderGraphImageSize::BackbufferSized,
+            RenderGraphImageFormat::ColorRgba16Sfloat,
+        );
+        graph_builder.add_resource(
+            "Normal",
+            RenderGraphImageSize::BackbufferSized,
+            RenderGraphImageFormat::ColorRgba16Sfloat,
+        );
+        graph_builder.add_resource(
+            "Color",
             RenderGraphImageSize::BackbufferSized,
             RenderGraphImageFormat::BackbufferFormat,
         );
@@ -72,13 +87,22 @@ mod tests {
         );
 
         graph_builder
-            .new_pass("Forward pass")
+            .new_pass("Geometry pass")
             .uses("Albedo", RenderGraphPassResourceBindPoint::ColorAttachment)
+            .uses("Position", RenderGraphPassResourceBindPoint::ColorAttachment)
+            .uses("Normal", RenderGraphPassResourceBindPoint::ColorAttachment)
             .uses("Depth", RenderGraphPassResourceBindPoint::DepthAttachment);
         graph_builder
-            .new_pass("Post process")
+            .new_pass("Lighting pass")
+            .uses("Color", RenderGraphPassResourceBindPoint::ColorAttachment)
+            .uses("Albedo", RenderGraphPassResourceBindPoint::InputAttachment)
+            .uses("Position", RenderGraphPassResourceBindPoint::InputAttachment)
+            .uses("Normal", RenderGraphPassResourceBindPoint::InputAttachment)
+            .uses("Depth", RenderGraphPassResourceBindPoint::InputAttachment);
+        graph_builder
+            .new_pass("Post process pass")
             .uses("Final", RenderGraphPassResourceBindPoint::ColorAttachment)
-            .uses("Albedo", RenderGraphPassResourceBindPoint::Sampler);
+            .uses("Color", RenderGraphPassResourceBindPoint::InputAttachment);
 
         graph_builder.set_back_buffer("Final");
 
