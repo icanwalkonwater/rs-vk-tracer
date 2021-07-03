@@ -13,7 +13,7 @@ render_graph = ["indexmap", "multimap"]
 fps_limiter = []
 no_storage_checks = []
 
-debug_render_graph = ["render_graph"]
+visualizer_render_graph = ["render_graph"]
 
 [dependencies]
 # Conveniences

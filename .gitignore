@@ -9,4 +9,5 @@ Cargo.lock
 *.spv
 *.cap
 *.dot
+*.mmd
 *.png

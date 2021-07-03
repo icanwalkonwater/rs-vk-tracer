@@ -1,5 +1,6 @@
 mod baking;
 mod builder;
+mod allocation;
 
 #[derive(Copy, Clone, Debug)]
 pub enum GraphValidationError {
@@ -9,15 +10,13 @@ pub enum GraphValidationError {
     ColorOrInputAttachmentDifferInSize,
     InputAndOutputDepthAttachmentsDiffer,
     LogicalResourceWrittenMoreThanOnce,
+    ReadModifyWriteWrongBindPoint,
 }
 
 #[cfg(test)]
 mod tests {
     use crate::ash::vk;
-    use crate::render_graph2::builder::{
-        RenderGraphBuilder, RenderGraphImageFormat, RenderGraphImageSize,
-        RenderGraphPassResourceBindPoint, RenderGraphResource,
-    };
+    use crate::render_graph2::builder::{RenderGraphBuilder, RenderGraphImageFormat, RenderGraphImageSize, RenderGraphPassResourceBindPoint, RenderGraphResource, RenderGraphResourcePersistence};
     use crate::render_graph2::baking::BakedRenderGraph;
 
     #[test]
@@ -32,12 +31,14 @@ mod tests {
                 depth: 0,
             }),
             RenderGraphImageFormat::ColorRgba8Unorm,
+            RenderGraphResourcePersistence::ClearInputPreserveOutput,
         );
 
         graph_builder.add_resource(
             "Depth",
             RenderGraphImageSize::BackbufferSized,
             RenderGraphImageFormat::DepthStencilOptimal,
+            RenderGraphResourcePersistence::Transient,
         );
 
         graph_builder
@@ -47,8 +48,8 @@ mod tests {
 
         graph_builder.set_back_buffer("Albedo");
 
-        let valid_graph = graph_builder.finalize_and_validate().unwrap();
-        let baked_graph = BakedRenderGraph::bake(&valid_graph).unwrap();
+        let mut valid_graph = graph_builder.finalize_and_validate().unwrap();
+        let baked_graph = BakedRenderGraph::bake(&mut valid_graph).unwrap();
     }
 
     #[test]
@@ -58,32 +59,38 @@ mod tests {
         graph_builder.add_resource(
             "Albedo",
             RenderGraphImageSize::BackbufferSized,
-            RenderGraphImageFormat::ColorRgba8Unorm,
+            RenderGraphImageFormat::BackbufferFormat,
+            RenderGraphResourcePersistence::Transient,
         );
         graph_builder.add_resource(
             "Depth",
             RenderGraphImageSize::BackbufferSized,
             RenderGraphImageFormat::DepthStencilOptimal,
+            RenderGraphResourcePersistence::ClearInput,
         );
         graph_builder.add_resource(
             "Position",
             RenderGraphImageSize::BackbufferSized,
             RenderGraphImageFormat::ColorRgba16Sfloat,
+            RenderGraphResourcePersistence::Transient,
         );
         graph_builder.add_resource(
             "Normal",
             RenderGraphImageSize::BackbufferSized,
             RenderGraphImageFormat::ColorRgba16Sfloat,
+            RenderGraphResourcePersistence::Transient,
         );
         graph_builder.add_resource(
             "Color",
             RenderGraphImageSize::BackbufferSized,
             RenderGraphImageFormat::BackbufferFormat,
+            RenderGraphResourcePersistence::Transient,
         );
         graph_builder.add_resource(
             "Final",
             RenderGraphImageSize::BackbufferSized,
             RenderGraphImageFormat::BackbufferFormat,
+            RenderGraphResourcePersistence::ClearInputPreserveOutput,
         );
 
         graph_builder
@@ -98,15 +105,17 @@ mod tests {
             .uses("Albedo", RenderGraphPassResourceBindPoint::InputAttachment)
             .uses("Position", RenderGraphPassResourceBindPoint::InputAttachment)
             .uses("Normal", RenderGraphPassResourceBindPoint::InputAttachment)
-            .uses("Depth", RenderGraphPassResourceBindPoint::InputAttachment);
+            .uses("Depth", RenderGraphPassResourceBindPoint::InputAttachment)
+            .allow_read_modify_write("Albedo", "Color");
         graph_builder
             .new_pass("Post process pass")
             .uses("Final", RenderGraphPassResourceBindPoint::ColorAttachment)
-            .uses("Color", RenderGraphPassResourceBindPoint::InputAttachment);
+            .uses("Color", RenderGraphPassResourceBindPoint::InputAttachment)
+            .allow_read_modify_write("Color", "Final");
 
         graph_builder.set_back_buffer("Final");
 
-        let valid_graph = graph_builder.finalize_and_validate().unwrap();
-        let baked_graph = BakedRenderGraph::bake(&valid_graph).unwrap();
+        let mut valid_graph = graph_builder.finalize_and_validate().unwrap();
+        let baked_graph = BakedRenderGraph::bake(&mut valid_graph).unwrap();
     }
 }
