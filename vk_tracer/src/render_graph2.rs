@@ -1,6 +1,6 @@
+mod allocation;
 mod baking;
 mod builder;
-mod allocation;
 
 #[derive(Copy, Clone, Debug)]
 pub enum GraphValidationError {
@@ -15,9 +15,17 @@ pub enum GraphValidationError {
 
 #[cfg(test)]
 mod tests {
-    use crate::ash::vk;
-    use crate::render_graph2::builder::{RenderGraphBuilder, RenderGraphImageFormat, RenderGraphImageSize, RenderGraphPassResourceBindPoint, RenderGraphResource, RenderGraphResourcePersistence};
-    use crate::render_graph2::baking::BakedRenderGraph;
+    use crate::{
+        ash::vk,
+        render_graph2::{
+            baking::BakedRenderGraph,
+            builder::{
+                RenderGraphBuilder, RenderGraphImageFormat, RenderGraphImageSize,
+                RenderGraphPassResourceBindPoint, RenderGraphResource,
+                RenderGraphResourcePersistence,
+            },
+        },
+    };
 
     #[test]
     fn test_1() {
@@ -96,14 +104,20 @@ mod tests {
         graph_builder
             .new_pass("Geometry pass")
             .uses("Albedo", RenderGraphPassResourceBindPoint::ColorAttachment)
-            .uses("Position", RenderGraphPassResourceBindPoint::ColorAttachment)
+            .uses(
+                "Position",
+                RenderGraphPassResourceBindPoint::ColorAttachment,
+            )
             .uses("Normal", RenderGraphPassResourceBindPoint::ColorAttachment)
             .uses("Depth", RenderGraphPassResourceBindPoint::DepthAttachment);
         graph_builder
             .new_pass("Lighting pass")
             .uses("Color", RenderGraphPassResourceBindPoint::ColorAttachment)
             .uses("Albedo", RenderGraphPassResourceBindPoint::InputAttachment)
-            .uses("Position", RenderGraphPassResourceBindPoint::InputAttachment)
+            .uses(
+                "Position",
+                RenderGraphPassResourceBindPoint::InputAttachment,
+            )
             .uses("Normal", RenderGraphPassResourceBindPoint::InputAttachment)
             .uses("Depth", RenderGraphPassResourceBindPoint::InputAttachment)
             .allow_read_modify_write("Albedo", "Color");

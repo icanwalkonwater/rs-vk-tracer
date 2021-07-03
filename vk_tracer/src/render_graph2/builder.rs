@@ -1,10 +1,12 @@
 use super::GraphValidationError;
 use crate::errors::{Result, VkTracerError};
 use ash::vk;
-use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug, Display};
-use std::hash::Hash;
 use itertools::Itertools;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::{Debug, Display},
+    hash::Hash,
+};
 
 pub trait RenderGraphLogicalTag: Copy + Eq + Hash + Debug + Display + 'static {}
 
@@ -101,7 +103,10 @@ impl RenderGraphPassResourceBindPoint {
                     | vk::PipelineStageFlags2KHR::LATE_FRAGMENT_TESTS
             }
             Self::InputAttachment | Self::Sampler => vk::PipelineStageFlags2KHR::FRAGMENT_SHADER,
-            Self::GeneralInputAndColorAttachment => vk::PipelineStageFlags2KHR::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags2KHR::FRAGMENT_SHADER,
+            Self::GeneralInputAndColorAttachment => {
+                vk::PipelineStageFlags2KHR::COLOR_ATTACHMENT_OUTPUT
+                    | vk::PipelineStageFlags2KHR::FRAGMENT_SHADER
+            }
         }
     }
 
@@ -118,7 +123,11 @@ impl RenderGraphPassResourceBindPoint {
                     | vk::AccessFlags2KHR::DEPTH_STENCIL_ATTACHMENT_WRITE
             }
             Self::Sampler => vk::AccessFlags2KHR::SHADER_READ,
-            Self::GeneralInputAndColorAttachment => vk::AccessFlags2KHR::COLOR_ATTACHMENT_READ | vk::AccessFlags2KHR::COLOR_ATTACHMENT_WRITE | vk::AccessFlags2KHR::INPUT_ATTACHMENT_READ,
+            Self::GeneralInputAndColorAttachment => {
+                vk::AccessFlags2KHR::COLOR_ATTACHMENT_READ
+                    | vk::AccessFlags2KHR::COLOR_ATTACHMENT_WRITE
+                    | vk::AccessFlags2KHR::INPUT_ATTACHMENT_READ
+            }
         }
     }
 
@@ -236,7 +245,6 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
         // Useful for later on
         for (&pass_tag, pass) in self.passes.iter() {
             for (res_tag, res) in pass.resources.iter() {
-
                 // Bind points that write and maybe read
                 // There can only be one per logical resource, otherwise we can't tell which to
                 // schedule first
@@ -282,31 +290,50 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
 
         // Check color and input attachments are all the same size
         for (_, pass) in &self.passes {
-            let _ = pass.resources.iter()
-                .filter(|(_, res)| res.bind_point == RenderGraphPassResourceBindPoint::ColorAttachment || res.bind_point == RenderGraphPassResourceBindPoint::InputAttachment)
+            let _ = pass
+                .resources
+                .iter()
+                .filter(|(_, res)| {
+                    res.bind_point == RenderGraphPassResourceBindPoint::ColorAttachment
+                        || res.bind_point == RenderGraphPassResourceBindPoint::InputAttachment
+                })
                 .map(|(tag, _)| self.resources[tag].size)
                 .try_fold(None, |acc, size| match acc {
-                        None => Ok(Some(size)),
-                        Some(last) if last == size => Ok(Some(size)),
-                        _ => Err(VkTracerError::InvalidRenderGraph(GraphValidationError::ColorOrInputAttachmentDifferInSize)),
-                    })?;
+                    None => Ok(Some(size)),
+                    Some(last) if last == size => Ok(Some(size)),
+                    _ => Err(VkTracerError::InvalidRenderGraph(
+                        GraphValidationError::ColorOrInputAttachmentDifferInSize,
+                    )),
+                })?;
         }
 
         // Check RMW
         for (pass_tag, pass) in &self.passes {
             for (input, color) in &pass.read_modify_write_whitelist {
-                if pass.resources.get(input).ok_or(VkTracerError::InvalidRenderGraph(
-                    GraphValidationError::TagNotRegistered,
-                ))?.bind_point != RenderGraphPassResourceBindPoint::InputAttachment {
+                if pass
+                    .resources
+                    .get(input)
+                    .ok_or(VkTracerError::InvalidRenderGraph(
+                        GraphValidationError::TagNotRegistered,
+                    ))?
+                    .bind_point
+                    != RenderGraphPassResourceBindPoint::InputAttachment
+                {
                     error!("Read-Modify-Write error: Pass {}, attachment {} is not an input attachment !", pass_tag, input);
                     return Err(VkTracerError::InvalidRenderGraph(
                         GraphValidationError::ReadModifyWriteWrongBindPoint,
                     ));
                 }
 
-                if pass.resources.get(color).ok_or(VkTracerError::InvalidRenderGraph(
-                    GraphValidationError::TagNotRegistered,
-                ))?.bind_point != RenderGraphPassResourceBindPoint::ColorAttachment {
+                if pass
+                    .resources
+                    .get(color)
+                    .ok_or(VkTracerError::InvalidRenderGraph(
+                        GraphValidationError::TagNotRegistered,
+                    ))?
+                    .bind_point
+                    != RenderGraphPassResourceBindPoint::ColorAttachment
+                {
                     error!("Read-Modify-Write error: Pass {}, attachment {} is not a color attachment !", pass_tag, color);
                     return Err(VkTracerError::InvalidRenderGraph(
                         GraphValidationError::ReadModifyWriteWrongBindPoint,
@@ -325,8 +352,8 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
 
             use std::io::Write;
             let mut visualizer_nodes = std::fs::File::create(
-                option_env!("VISUALIZER_GRAPH_OUT")
-                    .unwrap_or("./render_graph_nodes.dot"),
+                std::env::var("VISUALIZER_GRAPH_OUT")
+                    .unwrap_or(String::from("./render_graph_nodes.dot")),
             )
             .unwrap();
 
@@ -349,8 +376,12 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
             // Write passes
             for (pass_tag, pass) in self.passes.iter().map(|(t, p)| (*t, p)) {
                 let pass_id = tag_to_graph_id(pass_tag);
-                writeln!(visualizer_nodes,
-                " {} [shape=rectangle color=orange style=filled label=\"[{}]\\n{}\"]", pass_id, pass_tag, "Graphics").unwrap();
+                writeln!(
+                    visualizer_nodes,
+                    " {} [shape=rectangle color=orange style=filled label=\"[{}]\\n{}\"]",
+                    pass_id, pass_tag, "Graphics"
+                )
+                .unwrap();
 
                 // Write edges
                 for (res_tag, res_local) in pass.resources.iter().map(|(t, r)| (*t, r)) {
@@ -359,11 +390,11 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
                     let res_id = tag_to_graph_id(res_tag);
                     match res_local.bind_point {
                         ColorAttachment | DepthAttachment => {
-                            writeln!(visualizer_nodes," {} -> {}", pass_id, res_id).unwrap();
-                        },
+                            writeln!(visualizer_nodes, " {} -> {}", pass_id, res_id).unwrap();
+                        }
                         InputAttachment | Sampler => {
-                            writeln!(visualizer_nodes," {} -> {}", res_id, pass_id).unwrap();
-                        },
+                            writeln!(visualizer_nodes, " {} -> {}", res_id, pass_id).unwrap();
+                        }
                         GeneralInputAndColorAttachment => unreachable!(),
                     }
                 }
