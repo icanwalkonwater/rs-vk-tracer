@@ -1,9 +1,8 @@
 use super::GraphValidationError;
 use crate::errors::{Result, VkTracerError};
 use ash::vk;
-use itertools::Itertools;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap},
     fmt::{Debug, Display},
     hash::Hash,
 };
@@ -18,6 +17,7 @@ pub struct FrozenRenderGraph<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag>
     pub(crate) RenderGraphBuilder<R, P>,
 );
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct RenderGraphBuilder<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> {
     pub(crate) back_buffer_tag: Option<R>,
@@ -25,6 +25,7 @@ pub struct RenderGraphBuilder<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag
     pub(crate) passes: HashMap<P, RenderGraphBuilderPass<R>>,
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct RenderGraphBuilderPass<R: RenderGraphLogicalTag> {
     // TODO: add callback to check if the pass should really be included
@@ -32,6 +33,7 @@ pub struct RenderGraphBuilderPass<R: RenderGraphLogicalTag> {
     pub(crate) read_modify_write_whitelist: Vec<(R, R)>,
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct RenderGraphResource<P: RenderGraphLogicalTag> {
     pub(crate) size: RenderGraphImageSize,
@@ -42,6 +44,7 @@ pub struct RenderGraphResource<P: RenderGraphLogicalTag> {
     pub(crate) persistence: RenderGraphResourcePersistence,
 }
 
+#[allow(unused)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RenderGraphImageSize {
     BackbufferSized,
@@ -50,6 +53,7 @@ pub enum RenderGraphImageSize {
 }
 
 // TODO: Add more formats
+#[allow(unused)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RenderGraphImageFormat {
     BackbufferFormat,
@@ -58,6 +62,7 @@ pub enum RenderGraphImageFormat {
     DepthStencilOptimal,
 }
 
+#[allow(unused)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RenderGraphResourcePersistence {
     Transient,
@@ -73,6 +78,7 @@ pub struct RenderGraphPassResource {
     pub(crate) bind_point: RenderGraphPassResourceBindPoint,
 }
 
+#[allow(unused)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RenderGraphPassResourceBindPoint {
     ColorAttachment,
@@ -148,8 +154,17 @@ impl RenderGraphPassResourceBindPoint {
             _ => false,
         }
     }
+
+    #[inline]
+    pub(crate) fn is_attachment(&self) -> bool {
+        match self {
+            Self::ColorAttachment | Self::DepthAttachment | Self::GeneralInputAndColorAttachment => true,
+            _ => false,
+        }
+    }
 }
 
+#[allow(unused)]
 impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P> {
     pub fn new() -> Self {
         Self {
@@ -201,6 +216,7 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
     }
 }
 
+#[allow(unused)]
 impl<R: RenderGraphLogicalTag> RenderGraphBuilderPass<R> {
     pub fn uses(&mut self, tag: R, bind_point: RenderGraphPassResourceBindPoint) -> &mut Self {
         if bind_point == RenderGraphPassResourceBindPoint::GeneralInputAndColorAttachment {
@@ -218,6 +234,7 @@ impl<R: RenderGraphLogicalTag> RenderGraphBuilderPass<R> {
     }
 }
 
+#[allow(unused)]
 impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P> {
     /// Finalize the graph by filling in the gaps and see if everything makes sense.
     /// Also tries to be descriptive to what went wrong (if it goes wrong).
