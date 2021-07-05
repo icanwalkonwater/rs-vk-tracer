@@ -86,7 +86,8 @@ pub enum RenderGraphPassResourceBindPoint {
     DepthAttachment,
     Sampler,
     // Not for public use
-    GeneralInputAndColorAttachment,
+    AliasedColorAttachment,
+    AliasedInputAttachment,
 }
 
 impl RenderGraphPassResourceBindPoint {
@@ -96,7 +97,15 @@ impl RenderGraphPassResourceBindPoint {
             Self::ColorAttachment => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             Self::DepthAttachment => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             Self::InputAttachment | Self::Sampler => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            Self::GeneralInputAndColorAttachment => vk::ImageLayout::GENERAL,
+            Self::AliasedColorAttachment | Self::AliasedInputAttachment => vk::ImageLayout::GENERAL,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn aspect(&self) -> vk::ImageAspectFlags {
+        match self {
+            Self::ColorAttachment | Self::InputAttachment | Self::Sampler | Self::AliasedColorAttachment | Self::AliasedInputAttachment => vk::ImageAspectFlags::COLOR,
+            Self::DepthAttachment => vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL,
         }
     }
 
@@ -109,7 +118,7 @@ impl RenderGraphPassResourceBindPoint {
                     | vk::PipelineStageFlags2KHR::LATE_FRAGMENT_TESTS
             }
             Self::InputAttachment | Self::Sampler => vk::PipelineStageFlags2KHR::FRAGMENT_SHADER,
-            Self::GeneralInputAndColorAttachment => {
+            Self::AliasedColorAttachment | Self::AliasedInputAttachment => {
                 vk::PipelineStageFlags2KHR::COLOR_ATTACHMENT_OUTPUT
                     | vk::PipelineStageFlags2KHR::FRAGMENT_SHADER
             }
@@ -129,7 +138,7 @@ impl RenderGraphPassResourceBindPoint {
                     | vk::AccessFlags2KHR::DEPTH_STENCIL_ATTACHMENT_WRITE
             }
             Self::Sampler => vk::AccessFlags2KHR::SHADER_READ,
-            Self::GeneralInputAndColorAttachment => {
+            Self::AliasedColorAttachment | Self::AliasedInputAttachment => {
                 vk::AccessFlags2KHR::COLOR_ATTACHMENT_READ
                     | vk::AccessFlags2KHR::COLOR_ATTACHMENT_WRITE
                     | vk::AccessFlags2KHR::INPUT_ATTACHMENT_READ
@@ -141,7 +150,7 @@ impl RenderGraphPassResourceBindPoint {
     pub(crate) fn can_write(&self) -> bool {
         match self {
             Self::ColorAttachment | Self::DepthAttachment => true,
-            Self::GeneralInputAndColorAttachment => true,
+            Self::AliasedColorAttachment | Self::AliasedInputAttachment => true,
             _ => false,
         }
     }
@@ -150,7 +159,7 @@ impl RenderGraphPassResourceBindPoint {
     pub(crate) fn can_read(&self) -> bool {
         match self {
             Self::DepthAttachment | Self::InputAttachment | Self::Sampler => true,
-            Self::GeneralInputAndColorAttachment => true,
+            Self::AliasedColorAttachment | Self::AliasedInputAttachment => true,
             _ => false,
         }
     }
@@ -158,7 +167,23 @@ impl RenderGraphPassResourceBindPoint {
     #[inline]
     pub(crate) fn is_attachment(&self) -> bool {
         match self {
-            Self::ColorAttachment | Self::DepthAttachment | Self::GeneralInputAndColorAttachment => true,
+            Self::ColorAttachment | Self::InputAttachment | Self::DepthAttachment | Self::AliasedColorAttachment | Self::AliasedInputAttachment => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn is_depth(&self) -> bool {
+        match self {
+            Self::DepthAttachment => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn is_aliased(&self) -> bool {
+        match self {
+            Self::AliasedColorAttachment | Self::AliasedInputAttachment => true,
             _ => false,
         }
     }
@@ -219,7 +244,7 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphBuilder<R, P
 #[allow(unused)]
 impl<R: RenderGraphLogicalTag> RenderGraphBuilderPass<R> {
     pub fn uses(&mut self, tag: R, bind_point: RenderGraphPassResourceBindPoint) -> &mut Self {
-        if bind_point == RenderGraphPassResourceBindPoint::GeneralInputAndColorAttachment {
+        if bind_point.is_aliased() {
             panic!("These enums are reserved for private use, instead use #uses_input_to_color()");
         }
 

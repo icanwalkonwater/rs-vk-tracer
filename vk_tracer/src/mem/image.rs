@@ -39,7 +39,7 @@ impl VkTracerApp {
     ) -> Result<ImageViewFatHandle> {
         let swapchain = storage_access!(self.swapchain_storage, swapchain, HandleType::Swapchain);
 
-        let format = find_depth_format(self)?;
+        let format = find_depth_format(self);
 
         let image = RawImageAllocation::new(
             &self.vma,
@@ -77,7 +77,7 @@ impl VkTracerApp {
 
 /// Needs to be kept in sync with [has_stencil].
 #[inline]
-pub(crate) fn find_depth_format(app: &VkTracerApp) -> Result<vk::Format> {
+pub(crate) fn find_depth_format(app: &VkTracerApp) -> vk::Format {
     find_supported_format(
         app,
         [
@@ -87,7 +87,7 @@ pub(crate) fn find_depth_format(app: &VkTracerApp) -> Result<vk::Format> {
         ],
         vk::ImageTiling::OPTIMAL,
         vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
-    )
+    ).expect("Yay new edge case for depth format found !")
 }
 
 /// Needs to be kept in sync with [find_depth_format].

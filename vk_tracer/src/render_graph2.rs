@@ -67,7 +67,7 @@ mod tests {
         graph_builder.add_resource(
             "Albedo",
             RenderGraphImageSize::BackbufferSized,
-            RenderGraphImageFormat::BackbufferFormat,
+            RenderGraphImageFormat::ColorRgba8Unorm,
             RenderGraphResourcePersistence::Transient,
         );
         graph_builder.add_resource(
