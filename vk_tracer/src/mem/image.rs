@@ -87,7 +87,8 @@ pub(crate) fn find_depth_format(app: &VkTracerApp) -> vk::Format {
         ],
         vk::ImageTiling::OPTIMAL,
         vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
-    ).expect("Yay new edge case for depth format found !")
+    )
+    .expect("Yay new edge case for depth format found !")
 }
 
 /// Needs to be kept in sync with [find_depth_format].

@@ -1,14 +1,25 @@
-use crate::{VkTracerApp, SwapchainHandle};
-use crate::errors::{Result, HandleType};
-use crate::render_graph2::baking::{BakedRenderGraph, BakedRenderGraphPassResource};
-use crate::render_graph2::builder::{RenderGraphLogicalTag, RenderGraphImageFormat, RenderGraphResourcePersistence, RenderGraphPassResourceBindPoint};
+use crate::{
+    errors::{HandleType, Result},
+    mem::find_depth_format,
+    present::Swapchain,
+    render_graph2::{
+        baking::BakedRenderGraph,
+        builder::{
+            RenderGraphImageFormat, RenderGraphLogicalTag, RenderGraphPassResourceBindPoint,
+            RenderGraphResourcePersistence,
+        },
+    },
+    SwapchainHandle, VkTracerApp,
+};
 use ash::vk;
-use crate::present::Swapchain;
-use crate::mem::find_depth_format;
 use std::slice::from_ref;
 
 impl VkTracerApp {
-    fn translate_format(&self, swapchain: &Swapchain, format: RenderGraphImageFormat) -> vk::Format {
+    fn translate_format(
+        &self,
+        swapchain: &Swapchain,
+        format: RenderGraphImageFormat,
+    ) -> vk::Format {
         use RenderGraphImageFormat::*;
         match format {
             BackbufferFormat => swapchain.create_info.image_format,
@@ -32,8 +43,12 @@ impl RenderGraphResourcePersistence {
     #[inline]
     fn store_op(&self) -> vk::AttachmentStoreOp {
         match self {
-            Self::Transient | Self::PreserveInput | Self::ClearInput => vk::AttachmentStoreOp::DONT_CARE,
-            Self::PreserveOutput | Self::ClearInputPreserveOutput | Self::PreserveAll => vk::AttachmentStoreOp::STORE,
+            Self::Transient | Self::PreserveInput | Self::ClearInput => {
+                vk::AttachmentStoreOp::DONT_CARE
+            }
+            Self::PreserveOutput | Self::ClearInputPreserveOutput | Self::PreserveAll => {
+                vk::AttachmentStoreOp::STORE
+            }
         }
     }
 }
@@ -43,16 +58,24 @@ pub struct RenderGraphAllocation<R: RenderGraphLogicalTag, P: RenderGraphLogical
 }
 
 impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphAllocation<R, P> {
-    pub(crate) fn new(app: &VkTracerApp, swapchain: SwapchainHandle, graph: &BakedRenderGraph<R, P>) -> Result<Self> {
+    pub(crate) fn new(
+        app: &VkTracerApp,
+        swapchain: SwapchainHandle,
+        graph: &BakedRenderGraph<R, P>,
+    ) -> Result<Self> {
         let swapchain = storage_access!(app.swapchain_storage, swapchain, HandleType::Swapchain);
+        let vk_render_passes = Self::build_render_passes(app, swapchain, graph)?;
         todo!()
     }
 
-    fn build_render_passes(app: &VkTracerApp, swapchain: &Swapchain, graph: &BakedRenderGraph<R, P>) -> Result<Vec<vk::RenderPass>> {
+    fn build_render_passes(
+        app: &VkTracerApp,
+        swapchain: &Swapchain,
+        graph: &BakedRenderGraph<R, P>,
+    ) -> Result<Vec<vk::RenderPass>> {
         let mut passes = Vec::with_capacity(graph.passes.len());
 
         for (pass_physical, pass) in graph.passes.iter().enumerate() {
-
             let mut dependency_before = vk::MemoryBarrier2KHR::default();
             let mut dependency_after = vk::MemoryBarrier2KHR::default();
 
@@ -61,56 +84,75 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphAllocation<R
             let mut depth = None;
 
             // Create attachments
-            let attachments = pass.resources.iter()
-                .filter(|res| res.bind_point().is_attachment())
-                .enumerate()
-                .map(|(attachment_index, res)| {
-                    let timeline = &graph.resources_timelines[res.physical()];
+            let attachments =
+                pass.resources
+                    .iter()
+                    .filter(|res| res.bind_point().is_attachment())
+                    .enumerate()
+                    .map(|(attachment_index, res)| {
+                        let timeline = &graph.resources_timelines[res.physical()];
 
-                    // Update external dependencies
-                    {
-                        let barrier = timeline.sync_before_pass(res.physical());
-                        dependency_before.src_stage_mask |= barrier.src_stage_mask;
-                        dependency_before.src_access_mask |= barrier.src_access_mask;
-                        dependency_before.dst_stage_mask |= barrier.dst_stage_mask;
-                        dependency_before.dst_access_mask |= barrier.dst_access_mask;
+                        // Update external dependencies
+                        {
+                            fn merge_barrier(
+                                dst: &mut vk::MemoryBarrier2KHR,
+                                src: &vk::MemoryBarrier2KHR,
+                            ) {
+                                dst.src_stage_mask |= src.src_stage_mask;
+                                dst.src_access_mask |= src.src_access_mask;
+                                dst.dst_stage_mask |= src.dst_stage_mask;
+                                dst.dst_access_mask |= src.dst_access_mask;
+                            }
 
-                        let barrier = timeline.sync_after_pass(res.physical());
-                        dependency_after.src_stage_mask |= barrier.src_stage_mask;
-                        dependency_after.src_access_mask |= barrier.src_access_mask;
-                        dependency_after.dst_stage_mask |= barrier.dst_stage_mask;
-                        dependency_after.dst_access_mask |= barrier.dst_access_mask;
-                    }
+                            let (before, after) = timeline.sync_around_pass(res.physical());
+                            merge_barrier(&mut dependency_before, &before);
+                            merge_barrier(&mut dependency_after, &after);
+                        }
 
-                    let description = vk::AttachmentDescription2::builder()
-                        .flags(if res.bind_point().is_aliased() { vk::AttachmentDescriptionFlags::MAY_ALIAS } else { vk::AttachmentDescriptionFlags::empty() })
-                        .format(app.translate_format(swapchain, graph.resources[res.physical()].format()))
-                        .samples(vk::SampleCountFlags::TYPE_1)
-                        .load_op(res.persistence().load_op())
-                        .store_op(res.persistence().store_op())
-                        .stencil_load_op(if res.bind_point().is_depth() { res.persistence().load_op() } else { vk::AttachmentLoadOp::DONT_CARE })
-                        .stencil_store_op(if res.bind_point().is_depth() { res.persistence().store_op() } else { vk::AttachmentStoreOp::DONT_CARE })
-                        .initial_layout(timeline.layout_for_pass(pass_physical))
-                        .final_layout(timeline.layout_after_pass(pass_physical))
-                        .build();
+                        let description = vk::AttachmentDescription2::builder()
+                            .flags(if res.bind_point().is_aliased() {
+                                vk::AttachmentDescriptionFlags::MAY_ALIAS
+                            } else {
+                                vk::AttachmentDescriptionFlags::empty()
+                            })
+                            .format(app.translate_format(
+                                swapchain,
+                                graph.resources[res.physical()].format(),
+                            ))
+                            .samples(vk::SampleCountFlags::TYPE_1)
+                            .load_op(res.persistence().load_op())
+                            .store_op(res.persistence().store_op())
+                            .stencil_load_op(if res.bind_point().is_depth() {
+                                res.persistence().load_op()
+                            } else {
+                                vk::AttachmentLoadOp::DONT_CARE
+                            })
+                            .stencil_store_op(if res.bind_point().is_depth() {
+                                res.persistence().store_op()
+                            } else {
+                                vk::AttachmentStoreOp::DONT_CARE
+                            })
+                            .initial_layout(timeline.layout_for_pass(pass_physical))
+                            .final_layout(timeline.layout_after_pass(pass_physical))
+                            .build();
 
-                    let reference = vk::AttachmentReference2::builder()
-                        .attachment(attachment_index as _)
-                        .layout(description.initial_layout)
-                        .aspect_mask(res.bind_point().aspect())
-                        .build();
+                        let reference = vk::AttachmentReference2::builder()
+                            .attachment(attachment_index as _)
+                            .layout(description.initial_layout)
+                            .aspect_mask(res.bind_point().aspect())
+                            .build();
 
-                    use RenderGraphPassResourceBindPoint::*;
-                    match res.bind_point() {
-                        InputAttachment | AliasedInputAttachment => inputs.push(reference),
-                        ColorAttachment | AliasedColorAttachment => colors.push(reference),
-                        DepthAttachment => depth = Some(reference),
-                        _ => unreachable!(),
-                    }
+                        use RenderGraphPassResourceBindPoint::*;
+                        match res.bind_point() {
+                            InputAttachment | AliasedInputAttachment => inputs.push(reference),
+                            ColorAttachment | AliasedColorAttachment => colors.push(reference),
+                            DepthAttachment => depth = Some(reference),
+                            _ => unreachable!(),
+                        }
 
-                    description
-                })
-                .collect::<Vec<_>>();
+                        description
+                    })
+                    .collect::<Vec<_>>();
 
             let mut subpass = vk::SubpassDescription2::builder()
                 .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS);
@@ -147,7 +189,7 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphAllocation<R
                                 .dst_subpass(vk::SUBPASS_EXTERNAL)
                                 .dependency_flags(vk::DependencyFlags::BY_REGION)
                                 .push_next(&mut dependency_after)
-                                .build()
+                                .build(),
                         ]),
                     None,
                 )?

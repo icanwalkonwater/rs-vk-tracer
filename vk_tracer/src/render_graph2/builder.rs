@@ -2,7 +2,7 @@ use super::GraphValidationError;
 use crate::errors::{Result, VkTracerError};
 use ash::vk;
 use std::{
-    collections::{HashMap},
+    collections::HashMap,
     fmt::{Debug, Display},
     hash::Hash,
 };
@@ -104,7 +104,11 @@ impl RenderGraphPassResourceBindPoint {
     #[inline]
     pub(crate) fn aspect(&self) -> vk::ImageAspectFlags {
         match self {
-            Self::ColorAttachment | Self::InputAttachment | Self::Sampler | Self::AliasedColorAttachment | Self::AliasedInputAttachment => vk::ImageAspectFlags::COLOR,
+            Self::ColorAttachment
+            | Self::InputAttachment
+            | Self::Sampler
+            | Self::AliasedColorAttachment
+            | Self::AliasedInputAttachment => vk::ImageAspectFlags::COLOR,
             Self::DepthAttachment => vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL,
         }
     }
@@ -167,7 +171,11 @@ impl RenderGraphPassResourceBindPoint {
     #[inline]
     pub(crate) fn is_attachment(&self) -> bool {
         match self {
-            Self::ColorAttachment | Self::InputAttachment | Self::DepthAttachment | Self::AliasedColorAttachment | Self::AliasedInputAttachment => true,
+            Self::ColorAttachment
+            | Self::InputAttachment
+            | Self::DepthAttachment
+            | Self::AliasedColorAttachment
+            | Self::AliasedInputAttachment => true,
             _ => false,
         }
     }

@@ -2,15 +2,14 @@ use crate::{
     errors::Result,
     render_graph2::builder::{
         FrozenRenderGraph, RenderGraphBuilder, RenderGraphImageFormat, RenderGraphImageSize,
-        RenderGraphLogicalTag, RenderGraphPassResource, RenderGraphPassResourceBindPoint,
-        RenderGraphResourcePersistence,
+        RenderGraphLogicalTag, RenderGraphPassResourceBindPoint, RenderGraphResourcePersistence,
     },
 };
 use ash::vk;
 use indexmap::IndexSet;
 use itertools::Itertools;
 use multimap::MultiMap;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 type PhysicalResourceIndex = usize;
 type PhysicalPassIndex = usize;
@@ -18,7 +17,7 @@ type PhysicalPassIndex = usize;
 #[derive(Debug)]
 pub struct BakedRenderGraph<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> {
     pub(crate) resources: Box<[BakedRenderGraphResource]>,
-    pub(crate) resources_timelines: Box<[BakedRenderPassResourceTimeline<R>]>,
+    pub(crate) resources_timelines: Box<[BakedRenderPassResourceTimeline]>,
     pub(crate) passes: Box<[BakedRenderGraphPass<R, P>]>,
 }
 
@@ -26,7 +25,6 @@ pub struct BakedRenderGraph<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> 
 pub struct BakedRenderGraphPass<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> {
     pub(crate) tag: P,
     pub(crate) resources: Box<[BakedRenderGraphPassResource<R>]>,
-    pub(crate) barriers: HashMap<PhysicalResourceIndex, BakedRenderGraphPassBarrier>,
 }
 
 #[derive(Debug)]
@@ -42,7 +40,6 @@ impl BakedRenderGraphResource {
     pub(crate) fn size(&self) -> RenderGraphImageSize {
         match self {
             Self::Image { size, .. } => *size,
-            _ => unreachable!(),
         }
     }
 
@@ -50,7 +47,6 @@ impl BakedRenderGraphResource {
     pub(crate) fn format(&self) -> RenderGraphImageFormat {
         match self {
             Self::Image { format, .. } => *format,
-            _ => unreachable!(),
         }
     }
 }
@@ -101,62 +97,126 @@ pub(crate) enum BakedRenderGraphPassBarrier {
     },
 }
 
-#[derive(Debug)]
-pub(crate) struct BakedRenderPassResourceTimeline<R: RenderGraphLogicalTag> {
-    keyframes: HashSet<PhysicalPassIndex, ResourceState<R>>,
+#[derive(Clone, Debug)]
+pub(crate) struct BakedRenderPassResourceTimeline {
+    keyframes: BTreeMap<PhysicalPassIndex, ResourceTimelineState>,
 }
 
-impl<R: RenderGraphLogicalTag> BakedRenderPassResourceTimeline<R> {
+impl BakedRenderPassResourceTimeline {
     pub(crate) fn layout_for_pass(&self, pass: PhysicalPassIndex) -> vk::ImageLayout {
-        todo!()
+        // Get the layout defined for this pass or the pass just before
+        match self.keyframes.range(0..=pass).next_back().unwrap().1 {
+            ResourceTimelineState::Image {
+                layout: current_layout,
+                ..
+            } => *current_layout,
+        }
     }
 
     pub(crate) fn layout_after_pass(&self, pass: PhysicalPassIndex) -> vk::ImageLayout {
-        todo!()
+        match self.get_pass_after_index(pass) {
+            Some(ResourceTimelineState::Image {
+                layout: current_layout,
+                ..
+            }) => *current_layout,
+            None => {
+                // If this is the last pass, transition to the first pass
+                match self.keyframes.range(0..=pass).next().expect("Wtf").1 {
+                    ResourceTimelineState::Image {
+                        layout: current_layout,
+                        ..
+                    } => *current_layout,
+                }
+            }
+        }
     }
 
-    pub(crate) fn sync_before_pass(&self, pass: PhysicalPassIndex) -> vk::MemoryBarrier2KHR {
-        todo!()
+    pub(crate) fn sync_around_pass(
+        &self,
+        pass: PhysicalPassIndex,
+    ) -> (vk::MemoryBarrier2KHR, vk::MemoryBarrier2KHR) {
+        let mut before_barrier = vk::MemoryBarrier2KHR::default();
+        let mut after_barrier = vk::MemoryBarrier2KHR::default();
+
+        let current_pass = self.keyframes.get(&pass).expect("Why");
+
+        match current_pass {
+            ResourceTimelineState::Image {
+                bind_point,
+                flush,
+                pending_stages,
+                pending_accesses,
+                ..
+            } => {
+                if *flush {
+                    before_barrier.src_stage_mask |= *pending_stages;
+                    before_barrier.src_access_mask |= *pending_accesses;
+                }
+
+                let bind_point = bind_point.unwrap();
+                before_barrier.dst_stage_mask = bind_point.stages();
+                before_barrier.dst_access_mask = bind_point.accesses();
+                after_barrier.src_stage_mask = bind_point.stages();
+                after_barrier.src_access_mask = bind_point.accesses();
+            }
+        }
+
+        let next_pass = self.get_pass_after_index(pass);
+
+        match next_pass {
+            Some(ResourceTimelineState::Image {
+                bind_point: current_bind_point,
+                ..
+            }) => {
+                let bind_point = current_bind_point.unwrap();
+                after_barrier.dst_stage_mask |= bind_point.stages();
+                after_barrier.dst_access_mask |= bind_point.accesses();
+            }
+            _ => {}
+        }
+
+        (before_barrier, after_barrier)
     }
 
-    pub(crate) fn sync_after_pass(&self, pass: PhysicalPassIndex) -> vk::MemoryBarrier2KHR {
-        todo!()
+    #[inline]
+    fn get_pass_after_index(&self, pass: PhysicalPassIndex) -> Option<&ResourceTimelineState> {
+        self.keyframes
+            .range(pass..PhysicalPassIndex::MAX)
+            .next_back()
+            .map(|(_, state)| state)
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 enum ResourceState<R: RenderGraphLogicalTag> {
     Image {
         physical: PhysicalResourceIndex,
         // This can change throughout its life if it is aliased
         current_logical: (Option<R>, Option<R>),
 
+        current_bind_point: Option<RenderGraphPassResourceBindPoint>,
         current_layout: vk::ImageLayout,
 
+        // For timeline
+        timeline_flush_accesses: bool,
+
         // Past information
-        last_pass: Option<PhysicalPassIndex>,
-        last_stage: vk::PipelineStageFlags2KHR,
-        last_access: vk::AccessFlags2KHR,
+        last_stages: vk::PipelineStageFlags2KHR,
+        last_accesses: vk::AccessFlags2KHR,
         write_pending: bool,
-        // I don't care about your opinion
         read_pending: bool,
     },
 }
 
-#[derive(Debug)]
-enum FutureResourceUsage {
-    Read(PhysicalPassIndex),
-    Write(PhysicalPassIndex),
-    ReadWrite(PhysicalPassIndex),
-}
-
-impl FutureResourceUsage {
-    #[inline]
-    fn pass(&self) -> PhysicalPassIndex {
-        match *self {
-            Self::Read(i) | Self::Write(i) | Self::ReadWrite(i) => i,
-        }
-    }
+#[derive(Clone, Debug)]
+enum ResourceTimelineState {
+    Image {
+        bind_point: Option<RenderGraphPassResourceBindPoint>,
+        layout: vk::ImageLayout,
+        flush: bool,
+        pending_stages: vk::PipelineStageFlags2KHR,
+        pending_accesses: vk::AccessFlags2KHR,
+    },
 }
 
 impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> {
@@ -199,6 +259,12 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
         // Create baked resources and two way bindings between the one physical resources and many logical aliases
         let (baked_resources, resource_mapping, resource_mapping_inverse) =
             Self::create_physical_resources_and_mapping(&mut graph.0, &schedule);
+        let mut baked_resources_timelines = vec![
+            BakedRenderPassResourceTimeline {
+                keyframes: Default::default()
+            };
+            baked_resources.len()
+        ];
 
         // Compute initial resource state
         let mut resource_states = Self::init_resource_state(
@@ -207,6 +273,23 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
             &baked_resources,
             &resource_mapping_inverse,
         );
+        // Record initial state
+        for (i, state) in resource_states.iter().enumerate() {
+            match state {
+                ResourceState::Image { current_layout, .. } => {
+                    baked_resources_timelines[i].keyframes.insert(
+                        0,
+                        ResourceTimelineState::Image {
+                            bind_point: None,
+                            layout: *current_layout,
+                            flush: false,
+                            pending_stages: vk::PipelineStageFlags2KHR::NONE,
+                            pending_accesses: vk::AccessFlags2KHR::NONE,
+                        },
+                    );
+                }
+            }
+        }
 
         // Now simulate the execution of this graph and add barriers when it is appropriate
         for (pass_physical, pass_tag) in schedule.into_iter().enumerate() {
@@ -218,17 +301,15 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
                 .map(|(res_logical, res_local)| {
                     let res = &graph.0.resources[res_logical];
 
-                        BakedRenderGraphPassResource::Image {
-                            bind_point: res_local.bind_point,
-                            tag: *res_logical,
-                            physical: resource_mapping[res_logical],
-                            target_layout: vk::ImageLayout::UNDEFINED,
-                            persistence: res.persistence,
-                        }
+                    BakedRenderGraphPassResource::Image {
+                        bind_point: res_local.bind_point,
+                        tag: *res_logical,
+                        physical: resource_mapping[res_logical],
+                        target_layout: vk::ImageLayout::UNDEFINED,
+                        persistence: res.persistence,
+                    }
                 })
                 .collect::<Vec<_>>();
-
-            let mut baked_pass_barriers = HashMap::new();
 
             #[cfg(feature = "visualizer_render_graph")]
             let mut visualizer_barriers = Vec::new();
@@ -268,17 +349,19 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
                 match res_state {
                     ResourceState::Image {
                         current_logical,
+                        current_bind_point,
                         write_pending,
                         read_pending,
                         current_layout,
-                        last_stage,
-                        last_access,
+                        last_stages,
+                        last_accesses,
                         ..
                     } => {
                         *current_logical = (Some(res_tags[0]), None);
                         if res_tags.len() == 2 {
                             current_logical.1 = Some(res_tags[1]);
                         }
+                        *current_bind_point = Some(bind_point);
 
                         let has_read_after_write_hazard = bind_point.can_read() && *write_pending;
                         let has_write_after_read_hazard = bind_point.can_write() && *read_pending;
@@ -287,22 +370,27 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
                             || has_write_after_read_hazard
                             || need_layout_transition;
 
+                        // Record state to timeline of resource
+                        baked_resources_timelines[res_physical].keyframes.insert(
+                            pass_physical,
+                            ResourceTimelineState::Image {
+                                bind_point: Some(bind_point),
+                                layout: bind_point.optimal_layout(),
+                                flush: need_barrier,
+                                pending_stages: *last_stages,
+                                pending_accesses: *last_accesses,
+                            },
+                        );
+
                         if need_barrier {
                             let barrier = BakedRenderGraphPassBarrier::Image {
-                                src_stage: *last_stage,
-                                src_access: *last_access,
+                                src_stage: *last_stages,
+                                src_access: *last_accesses,
                                 dst_stage: bind_point.stages(),
                                 dst_access: bind_point.accesses(),
                                 old_layout: *current_layout,
                                 new_layout: bind_point.optimal_layout(),
                             };
-
-                            baked_pass_barriers.insert(res_physical, barrier);
-
-                            // Update target layout in previous pass
-                            if need_layout_transition {
-
-                            }
 
                             #[cfg(feature = "visualizer_render_graph")]
                             {
@@ -335,8 +423,8 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
                             // If the layout need to change, we will reach this line, so no need to
                             // specify it outside too
                             *current_layout = bind_point.optimal_layout();
-                            *last_stage = vk::PipelineStageFlags2KHR::NONE;
-                            *last_access = vk::AccessFlags2KHR::NONE;
+                            *last_stages = vk::PipelineStageFlags2KHR::NONE;
+                            *last_accesses = vk::AccessFlags2KHR::NONE;
                         }
 
                         // Advance the resource state
@@ -346,8 +434,8 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
                         if bind_point.can_read() {
                             *read_pending = true;
                         }
-                        *last_stage |= bind_point.stages();
-                        *last_access |= bind_point.accesses();
+                        *last_stages |= bind_point.stages();
+                        *last_accesses |= bind_point.accesses();
                     }
                 }
             }
@@ -393,11 +481,9 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
                 current_time += 10;
             }
 
-            baked_pass_barriers.shrink_to_fit();
             baked_passes.push(BakedRenderGraphPass {
                 tag: pass_tag,
                 resources: baked_pass_resources.into_boxed_slice(),
-                barriers: baked_pass_barriers,
             });
         }
 
@@ -480,7 +566,7 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
 
         Ok(Self {
             resources: baked_resources.into_boxed_slice(),
-            resources_timelines: todo!(),
+            resources_timelines: baked_resources_timelines.into_boxed_slice(),
             passes: baked_passes.into_boxed_slice(),
         })
     }
@@ -625,11 +711,9 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
                         // Namely, it only works with the GENERAL image layout
 
                         let input = pass.resources.get_mut(last_tag).unwrap();
-                        input.bind_point =
-                            RenderGraphPassResourceBindPoint::AliasedInputAttachment;
+                        input.bind_point = RenderGraphPassResourceBindPoint::AliasedInputAttachment;
                         let color = pass.resources.get_mut(res_tag).unwrap();
-                        color.bind_point =
-                            RenderGraphPassResourceBindPoint::AliasedColorAttachment;
+                        color.bind_point = RenderGraphPassResourceBindPoint::AliasedColorAttachment;
 
                         // Finish
                         bucket.push(res_physical);
@@ -687,10 +771,11 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
             resource_states.push(ResourceState::Image {
                 physical: res_physical,
                 current_logical: (None, None),
+                current_bind_point: None,
                 current_layout: initial_layout,
-                last_pass: None,
-                last_stage: vk::PipelineStageFlags2KHR::NONE,
-                last_access: vk::AccessFlags2KHR::NONE,
+                timeline_flush_accesses: false,
+                last_stages: vk::PipelineStageFlags2KHR::NONE,
+                last_accesses: vk::AccessFlags2KHR::NONE,
                 write_pending: false,
                 read_pending: false,
             })
@@ -718,49 +803,5 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> BakedRenderGraph<R, P> 
                 }
             })
             .unwrap()
-    }
-
-    fn predict_future_of_resource(
-        graph: &RenderGraphBuilder<R, P>,
-        schedule: &[P],
-        resource_aliases: &[R],
-    ) -> (Vec<FutureResourceUsage>, vk::ImageLayout) {
-        let mut usages = Vec::new();
-
-        let find_alias_macro = |resources: &HashMap<R, RenderGraphPassResource>| {
-            for alias in resource_aliases {
-                if resources.contains_key(alias) {
-                    return Some(alias);
-                }
-            }
-            None
-        };
-
-        let mut initial_layout = None;
-
-        // Walk pass schedule and when this resource is used, record how it will be used
-        for (pass_physical, pass_logical) in schedule.iter().enumerate() {
-            let pass = &graph.passes[pass_logical];
-            // Search pass for one of the aliases
-            // (There can only be 0 or 1 of the aliases in the pass because otherwise it wouldn't be aliased)
-            if let Some(alias) = find_alias_macro(&pass.resources) {
-                let bind_point = pass.resources[alias].bind_point;
-
-                usages.push(match (bind_point.can_read(), bind_point.can_write()) {
-                    (true, true) => FutureResourceUsage::ReadWrite(pass_physical),
-                    (false, true) => FutureResourceUsage::Write(pass_physical),
-                    (true, false) => FutureResourceUsage::Read(pass_physical),
-                    _ => unreachable!(),
-                });
-
-                // If this pass is the first one where the resource will be used, the initial layout
-                // of the resource must be the optimal one for this pass
-                if let None = initial_layout {
-                    initial_layout = Some(bind_point.optimal_layout());
-                }
-            }
-        }
-
-        (usages, initial_layout.unwrap())
     }
 }
