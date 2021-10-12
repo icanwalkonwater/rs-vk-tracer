@@ -13,6 +13,7 @@ use crate::{
 };
 use ash::vk;
 use std::slice::from_ref;
+use crate::render_graph2::baking::BakedRenderGraphResource;
 
 impl VkTracerApp {
     fn translate_format(
@@ -65,6 +66,8 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphAllocation<R
     ) -> Result<Self> {
         let swapchain = storage_access!(app.swapchain_storage, swapchain, HandleType::Swapchain);
         let vk_render_passes = Self::build_render_passes(app, swapchain, graph)?;
+
+        graph.resources
         todo!()
     }
 
@@ -199,5 +202,23 @@ impl<R: RenderGraphLogicalTag, P: RenderGraphLogicalTag> RenderGraphAllocation<R
         }
 
         Ok(passes)
+    }
+
+    fn allocate_attachments(graph: &BakedRenderGraph<R, P>) {
+        let size = graph.resources.iter().find(|res| match res { BakedRenderGraphResource::Image {  } })
+    }
+
+    fn build_framebuffers(app: &VkTracerApp, render_passes: &[vk::RenderPass]) {
+        vk::FramebufferCreateInfo {
+            s_type: Default::default(),
+            p_next: (),
+            flags: Default::default(),
+            render_pass: Default::default(),
+            attachment_count: 0,
+            p_attachments: (),
+            width: 0,
+            height: 0,
+            layers: 0
+        }
     }
 }
